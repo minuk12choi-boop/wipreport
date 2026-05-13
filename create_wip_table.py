@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pandas as pd
 
 
-DEFAULT_PATHS = {
-    "eqp": r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx",
-    "hold": r"C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx",
-    "mcpath": r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx",
-    "tip": r"C:\Users\minuk12.choi\Documents\zhbm_tip.xlsx",
-}
+EQP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx"
+HOLD_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx"
+MCPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx"
+TIP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_tip.xlsx"
 
 REQUIRED_COLUMNS = {
     "mcpath": [
@@ -60,36 +57,6 @@ def _assert_required_columns(df: pd.DataFrame, name: str) -> None:
     missing = [c for c in REQUIRED_COLUMNS[name] if c not in df.columns]
     if missing:
         raise WipBuildError(f"{name} 파일에 필요한 컬럼이 없습니다: {missing}")
-
-
-def _extract_xlsx_path(readme_text: str, filename: str) -> str | None:
-    pattern = rf"([A-Za-z]:\\[^\"\n\r]*{re.escape(filename)})"
-    m = re.search(pattern, readme_text, flags=re.IGNORECASE)
-    return m.group(1) if m else None
-
-
-def resolve_input_paths(script_dir: Path) -> dict[str, Path]:
-    readme_path = script_dir / "README.md"
-    if not readme_path.exists():
-        raise WipBuildError("README.md를 찾을 수 없습니다.")
-
-    readme_text = readme_path.read_text(encoding="utf-8")
-    mapping = {
-        "eqp": "zhbm_eqpmaster.xlsx",
-        "hold": "zhbm_hold.xlsx",
-        "mcpath": "zhbm_mclotsteppath.xlsx",
-        "tip": "zhbm_tip.xlsx",
-    }
-
-    resolved: dict[str, Path] = {}
-    for key, filename in mapping.items():
-        detected = _extract_xlsx_path(readme_text, filename)
-        if detected is None:
-            print(f"README.md에서 {filename} 경로를 찾지 못했습니다. 기본 경로를 사용합니다.")
-            detected = DEFAULT_PATHS[key]
-        resolved[key] = Path(detected)
-
-    return resolved
 
 
 def _load_excel(name: str, path: Path) -> pd.DataFrame:
@@ -205,7 +172,12 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
 
 def main() -> None:
     script_dir = Path(__file__).resolve().parent
-    paths = resolve_input_paths(script_dir)
+    paths = {
+        "eqp": Path(EQP_PATH),
+        "hold": Path(HOLD_PATH),
+        "mcpath": Path(MCPATH_PATH),
+        "tip": Path(TIP_PATH),
+    }
 
     mcpath = _load_excel("mcpath", paths["mcpath"])
     eqp = _load_excel("eqp", paths["eqp"])
@@ -218,8 +190,10 @@ def main() -> None:
     wip.to_excel(output_path, index=False)
 
     print("[입력 파일 경로]")
-    for k, p in paths.items():
-        print(f"- {k}: {p}")
+    print(f"- eqp: {paths['eqp']}")
+    print(f"- hold: {paths['hold']}")
+    print(f"- mcpath: {paths['mcpath']}")
+    print(f"- tip: {paths['tip']}")
     print("[입력 row 수]")
     print(f"- mcpath: {len(mcpath)}")
     print(f"- eqp: {len(eqp)}")
