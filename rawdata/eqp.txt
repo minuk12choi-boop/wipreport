@@ -1,3 +1,6 @@
+현재 .xlsx 경로: "C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx"
+
+
 <query>
 select
 eqp_id,
