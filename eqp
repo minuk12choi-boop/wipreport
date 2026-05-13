@@ -1,0 +1,17 @@
+<query>
+select
+eqp_id,
+batch_kind,
+origin_line_id as eqpline,
+eqp_status as body_eqp_status,
+to_date(eqp_status_change_time, 'yyyymmdd hh24:mi:ss') as body_status_change_time
+FROM SMIMES.MI_EQUIPMENT 
+where line_id = 'PFR1' and tool_kind = 'EQP'
+
+
+<column list>
+EQP_ID	VARCHAR2(40)
+BATCH_KIND	VARCHAR2(20)
+EQPLINE	VARCHAR2(10)
+BODY_EQP_STATUS	VARCHAR2(40)
+BODY_STATUS_CHANGE_TIME	DATE
