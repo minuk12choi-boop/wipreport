@@ -1,3 +1,4 @@
+<query>
 with
                 t as (SELECT DISTINCT
                                         t.process, 
@@ -86,3 +87,16 @@ type_cham,
 (case when prevent='PREVENT' then eventtime end) as eventtime,
 eqpline
  from tee
+
+<column list>
+PROCESS	VARCHAR2(16)
+STEP	VARCHAR2(16)
+PPID	VARCHAR2(40)
+EQPCHAM	VARCHAR2(41)
+CHAMBERID	VARCHAR2(24)
+BATCH_KIND	VARCHAR2(20)
+PREVENT	VARCHAR2(7)
+TYPE_BODY	VARCHAR2(7)
+TYPE_CHAM	VARCHAR2(7)
+EVENTTIME	DATE
+EQPLINE	VARCHAR2(10)
