@@ -42,12 +42,14 @@ with
                             ttt.prevent,
                         ttt.eventtime,
                                         e.batch_kind,
-                                        e.origin_line_id as eqp_line
+				e.origin_line_id as eqp_line
                                     FROM ttt
                                     LEFT JOIN (SELECT DISTINCT
                                                 eqp_id,
                                                 batch_kind,
-                                                origin_line_id
+                                                origin_line_id,
+				eqp_status,
+				eqp_status_change_time
                                                 FROM SMIMES.MI_EQUIPMENT where line_id = 'PFR1') e
                                         ON ttt.ee = e.eqp_id
                                     ORDER BY process, step, ppid, ee),
@@ -72,21 +74,38 @@ with
                                     ON a.process = b.process
                                         AND a.step = b.step
                                         AND a.ppid = b.ppid
-                                        AND a.eqpid = b.eqpid)
+                                        AND a.eqpid = b.eqpid),
+
+es as (select
+nvl(b.eqp_id, a.eqp_id) as eqpcham,
+a.eqp_status as body_eqp_status,
+b.eqp_status as cham_eqp_status,
+to_date(a.eqp_status_change_time, 'yyyymmdd hh24:mi:ss') as body_status_change_time,
+to_date(b.eqp_status_change_time, 'yyyymmdd hh24:mi:ss') as cham_status_change_time
+FROM (select eqp_id, eqp_status, eqp_status_change_time from SMIMES.MI_EQUIPMENT where line_id = 'PFR1' and tool_kind = 'EQP') a,
+         (select nvl(SUBSTR(EQP_ID, 1, INSTR(EQP_ID, '-')-1),SUBSTR(EQP_ID, 1, INSTR(EQP_ID, '_')-1)) AS body, eqp_id, eqp_status, eqp_status_change_time from SMIMES.MI_EQUIPMENT where line_id = 'PFR1' and tool_kind = 'CHAMBER') b
+where a.eqp_id = b.body(+))
 
 select
 process,
 step,
 ppid,
-eqpcham,
+tee.eqpcham,
 chamberid,
 batch_kind,
 prevent,
 type_body,
 type_cham,
-(case when prevent='PREVENT' then eventtime end) as eventtime,
+(case when prevent='PREVENT' then eventtime end) as tip_eventtime,
+(case when body_eqp_status in ('LOCAL', 'PM', 'DOWN') then body_eqp_status 
+       when cham_eqp_status in ('LOCAL' ,'PM', 'DOWN') then cham_eqp_status end) as eqpissue,
+body_eqp_status,
+cham_eqp_status,
+(case when body_eqp_status in ('LOCAL', 'PM', 'DOWN') then body_status_change_time
+       when cham_eqp_status in ('LOCAL' ,'PM', 'DOWN') then cham_status_change_time end) as eqpissuetime,
 eqpline
- from tee
+ from tee, es
+where tee.eqpcham = es.eqpcham(+)
 
 <column list>
 PROCESS	VARCHAR2(16)
@@ -98,5 +117,10 @@ BATCH_KIND	VARCHAR2(20)
 PREVENT	VARCHAR2(7)
 TYPE_BODY	VARCHAR2(7)
 TYPE_CHAM	VARCHAR2(7)
-EVENTTIME	DATE
+TIP_EVENTTIME	DATE
+EQPISSUE	VARCHAR2(40)
+BODY_EQP_STATUS	VARCHAR2(40)
+CHAM_EQP_STATUS	VARCHAR2(40)
+EQPISSUETIME	DATE
 EQPLINE	VARCHAR2(10)
+
