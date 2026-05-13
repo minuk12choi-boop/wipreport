@@ -7,4 +7,8 @@ PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create
 재시도 오류: File is not a zip file
 임시복사 오류: File is not a zip file
 
-python -c "from pathlib import Path; p=Path(r'C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx'); print('exists=',p.exists()); print('size=',p.stat().st_size if p.exists() else None); print('suffix=',p.suffix); print('head=',p.read_bytes()[:80] if p.exists() else None)"
+PS D:\PERSONAL_SPACE\SW\python> python -c "from pathlib import Path; p=Path(r'C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx'); print('exists=',p.exists()); print('size=',p.stat().st_size if p.exists() else None); print('suffix=',p.suffix); print('head=',p.read_bytes()[:80] if p.exists() else None)"   
+exists= True
+size= 60084
+suffix= .xlsx
+head= b'<## NASCA DRM FILE - VER1.00 ##>\xc37\x97:\xe6\xef&\xadQ\xef\xc6h\xa91_@\x94\x0f\x00\x00\xb2\xe6\xf1\x1c\xbc\x1e1\x1e\xe0\x17\xd5\xa5\xebv\xf0\xbf\xd4\xbf5\xa6V\x91\xcc\xa6j\xe9Wr'
