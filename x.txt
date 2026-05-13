@@ -6,3 +6,5 @@ PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create
 원본 오류: File is not a zip file
 재시도 오류: File is not a zip file
 임시복사 오류: File is not a zip file
+
+python -c "from pathlib import Path; p=Path(r'C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx'); print('exists=',p.exists()); print('size=',p.stat().st_size if p.exists() else None); print('suffix=',p.suffix); print('head=',p.read_bytes()[:80] if p.exists() else None)"
