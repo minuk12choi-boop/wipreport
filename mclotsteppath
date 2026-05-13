@@ -59,6 +59,7 @@ from SMICDC_P3NRD.MC_LOT_STEP_PATH p,
                  eqp_id 
             from SMIMES.MI_EQP_GROUP_LIST
             where instr(eqp_id, 'OFF')=0 
+	and line_id = 'PFR1'
             order by eqp_group_name, eqp_id) e,
 	r
 where step_skip_yn<>'Y'
@@ -104,9 +105,9 @@ where m.PROC_ID in ('K4B1', 'K4B2', 'K4B3', 'K4B4')
 	and m.LOT_STATUS_SEG in ('Active', 'Hold', 'Transferred')
 	and m.lot_id = p.lot_id(+)
 	and m.order_seq = p.order_seq(+)
-)
+),
 
-select 
+u as (select 
 m.cur_line_id,
 m.sys_line_id,
 m.lot_id,
@@ -147,7 +148,28 @@ union all
 
 select * from m
 where m.delay_step_type='S' and status='RUN'
-	or m.delay_step_type<>'S'
+	or m.delay_step_type<>'S'),
+
+g AS	
+(SELECT DISTINCT LOT_ID, NEW_ATTR_VALUE AS GRADE
+FROM 
+(SELECT
+h.LOT_ID,
+h.LOT_TRANSN_TIME,
+h.NEW_ATTR_VALUE,
+MAX(h.LOT_TRANSN_TIME) OVER (PARTITION BY h.LOT_ID, h.STEP_SEQ) AS MAX
+FROM   MI_LOT_TRANSN_HIST_V h, (select lot_id from SMICDC_P3NRD.MC_LOT m where m.PROC_ID in ('K4B1', 'K4B2', 'K4B3', 'K4B4')) m
+WHERE h.lot_id = m.lot_id
+	and LOT_TRANSN_TYPE = 'ModifyAttr' AND WIP_ATTRIBUTE IN ('GRADE')
+	AND LINE_ID IN ('PFR1'))
+where MAX=LOT_TRANSN_TIME)
+
+select
+
+u.*,
+nvl(g.grade,'-') as grade
+from u, g
+where u.lot_id = g.lot_id(+) 
 
 <column list>
 CUR_LINE_ID	VARCHAR2(40)
@@ -180,3 +202,4 @@ START_DATE	VARCHAR2(18)
 LAST_TKOUT_DATE	VARCHAR2(18)
 STEP_ARRIVE_DATE	VARCHAR2(18)
 LAST_EVENT_DATE	VARCHAR2(18)
+GRADE	VARCHAR2(255)
