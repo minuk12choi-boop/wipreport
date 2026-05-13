@@ -5,3 +5,8 @@ usage: create_wip_table.py [-h] --mcpath MCPATH --eqp EQP --tip TIP --hold
                            [--if-exists {fail,replace,append}]
                            [--output-csv OUTPUT_CSV]
 create_wip_table.py: error: the following arguments are required: --mcpath, --eqp, --tip, --hold
+
+eqp.txt -> eqp as e ("C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx") 
+hold.txt -> hold as h ("C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx") 
+mclotsteppath.txt -> mcpath as m ("C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx") 
+tip.txt -> tip as t ("C:\Users\minuk12.choi\Documents\zhbm_tip.xlsx")
