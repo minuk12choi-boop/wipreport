@@ -1,7 +1,1 @@
-PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
-usage: create_wip_table.py [-h] --mcpath MCPATH --eqp EQP --tip TIP --hold
-                           HOLD [--sqlite-db SQLITE_DB] [--db-url DB_URL]     
-                           [--table-name TABLE_NAME]
-                           [--if-exists {fail,replace,append}]
-                           [--output-csv OUTPUT_CSV]
-create_wip_table.py: error: the following arguments are required: --mcpath, --eqp, --tip, --hold
+Select-String -Path "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py" -Pattern "mcpath|eqp|tip|hold|required=True|add_argument"
