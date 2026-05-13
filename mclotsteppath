@@ -1,1 +1,150 @@
+with
+
+r as (select
+	lot_id, 
+	order_seq, 
+	count(CASE WHEN delay_step_type='S' THEN delay_step_type END) OVER (PARTITION BY lot_id ORDER BY order_seq) as de_rank 
+from
+(select lot_id, 
+	order_seq, 
+	delay_step_type
+	from SMICDC_P3NRD.MC_LOT_STEP_PATH 
+	where step_skip_yn<>'Y'
+         	and proc_id in ('K4B1', 'K4B2', 'K4B3', 'K4B4') 
+	and delay_step_type IN ('S', 'Y')
+	order by lot_id, order_seq)
+	),
+
+p as (
+select 
+p.lot_id,
+proc_id,
+p.order_seq, 
+sample_step_type,
+metal_status,
+r.de_rank,
+p.delay_step_type,
+(case 
+when nvl(p.delay_step_type,'-') = 'S' then '연속첫' 
+when nvl(p.delay_step_type,'-') ='Y' then 
+'연속'
+||
+'('
+||
+(case when NVL(p.delay_step_type,'-')='Y' then TO_CHAR(TRUNC(p.delay_time_mins)) end)
+||')'
+end) as 연속,
+	layer_id,
+	step_level,
+	step_seq,
+	step_desc,
+	eqp_type,
+	eqp_group_id AS eqp_group_raw,
+	e.eqp_id,
+	recipe_id,
+(CASE WHEN ext_1st_vals is not null then 
+(case 
+when NVL(tkin_type, '-') = 'EIN' then 'EIN' end)
+||
+'('
+||
+ext_1st_vals
+||')'
+end ) as tkintype,
+	tkin_type_detail
+from SMICDC_P3NRD.MC_LOT_STEP_PATH p, 
+	 (select 
+                 eqp_group_name, 
+                 eqp_id 
+            from SMIMES.MI_EQP_GROUP_LIST
+            where instr(eqp_id, 'OFF')=0 
+            order by eqp_group_name, eqp_id) e,
+	r
+where step_skip_yn<>'Y'
+         and proc_id in ('K4B1', 'K4B2', 'K4B3', 'K4B4')
+         and eqp_group_id = eqp_group_name(+)
+	and p.lot_id = r.lot_id(+)
+	and p.order_seq = r.order_seq(+)),
+
+m as (
+select 
+m.cur_line_id,
+m.sys_line_id,
+m.lot_id,
+m.carr_id,
+m.lot_type,
+m.lot_level,
+m.cur_qty,
+m.bay_name,
+(case when m.lot_status_seg='Hold' then 'HOLD' else m.step_status_seg end) as status,
+m.proc_id,
+m.order_seq,
+p.sample_step_type,
+p.metal_status,
+p.de_rank,
+p.delay_step_type,
+p.연속,
+p.layer_id,
+p.step_level,
+m.step_seq,
+p.step_desc,
+p.eqp_type,
+p.eqp_group_raw,
+p.eqp_id,
+p.recipe_id,
+p.tkintype,
+p.tkin_type_detail,
+m.START_DATE,
+m.LAST_TKOUT_DATE,
+m.STEP_ARRIVE_DATE,
+m.LAST_EVENT_DATE
+from SMICDC_P3NRD.MC_LOT m, p
+where m.PROC_ID in ('K4B1', 'K4B2', 'K4B3', 'K4B4')
+	and m.LOT_STATUS_SEG in ('Active', 'Hold', 'Transferred')
+	and m.lot_id = p.lot_id(+)
+	and m.order_seq = p.order_seq(+)
+)
+
+select 
+m.cur_line_id,
+m.sys_line_id,
+m.lot_id,
+m.carr_id,
+m.lot_type,
+m.lot_level,
+m.cur_qty,
+m.bay_name,
+m.status,
+m.proc_id,
+m.order_seq,
+p.sample_step_type,
+p.metal_status,
+p.de_rank,
+p.delay_step_type,
+p.연속,
+p.layer_id,
+p.step_level,
+m.step_seq,
+p.step_desc,
+p.eqp_type,
+p.eqp_group_raw,
+p.eqp_id,
+p.recipe_id,
+p.tkintype,
+p.tkin_type_detail,
+m.START_DATE,
+m.LAST_TKOUT_DATE,
+m.STEP_ARRIVE_DATE,
+m.LAST_EVENT_DATE
+from m, p
+where m.delay_step_type='S' 
+	and status<>('RUN')
+	and m.lot_id = p.lot_id(+)
+	and m.de_rank = p.de_rank(+)
+
+union all
+
+select * from m
+where m.delay_step_type='S' and status='RUN'
+	or m.delay_step_type<>'S'
 
