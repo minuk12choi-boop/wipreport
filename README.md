@@ -27,4 +27,10 @@ tip.txt -> tip as t
                eqpissue=nvl(t.eqpissue, case when me.body_eqp_status in ('LOCAL', 'PM', 'DOWN') then me.body_eqp_status end)
      (*변경필요컬럼은 초기 정합성 체크 단계에서만 변경된 컬럼, 변경에 사용된 컬럼을 모두 남겨놓지만 정합성 검증이 되면 최종적으론 변경된 컬럼만 유지하면 되고 변경에 사용된 컬럼은 없어도된다.)
 
-4.
+4. met 테이블에 hold as h를 조인한다. (=as meth 테이블)
+   -조인조건: met.lot_id = h.lot_id and met.step_seq = h.step_seq
+   (*단, 해당 조인은 where met.status<>'RUN' 일 때만 조인할 것)
+   -신규컬럼: h.item_type의 값은 ['EXCEPTION', 'HOLD LOT', 'FTkinPvLot', 'FUTUREHOLD'] 인데, 각각이 차례대로 '예약제외', 'HOLD', 'FTP' 컬럼이 새로 생기게 하고 h.item_type에 해당하는 행에 'O'가 컬럼값으로 들어가게 해달라.예를 들면 item_type='EXCEPTION'인 행은 '예약제외' 컬럼에 'O'가 체크되게 하는 것이다.(*FUTUREHOLD는 HOLD컬럼쪽에 붙게하기) 그리고 같은 타입에 두개의 행이 조인되는 경우이면 'O'를 하나만 넣으면 된다.
+   -add_columns: h.hold_user, h.hold_reason, h.hold_date(*hold_date는 '예약제외', 'HOLD', 'FTP'이 하나의 행에 몇개가 조인이 될진 모르겠지만 셋중에 min hold_date값이 하나만 들어가게 해주고,각각은 또 '예약제외_user', 'FTP_user', 'HOLD_user', '예약제외_reason', 'FTP_reason', 'HOLD_reason'의 커럼에 각 값이 들어간다. 만약 같은 타입에 두개 이상의 행이 조인되는 경우 hold_user나, hold_reason 같은 경우엔 uniqueconcatenate(h.add_columns) over (met.lot_id, met.order_seq, met.step_seq, met.recipeid) 가 되도록 해달라. 즉 이 4번 조인으로 인해서는 행이 늘어나지 않길 원하는 것이다.
+
+meth 테이블을 원본으로 하여 시각화하는 웹을 만들 예정.
