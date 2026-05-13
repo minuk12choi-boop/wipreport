@@ -96,10 +96,10 @@ p.eqp_id,
 p.recipe_id,
 p.tkintype,
 p.tkin_type_detail,
-m.START_DATE,
-m.LAST_TKOUT_DATE,
-m.STEP_ARRIVE_DATE,
-m.LAST_EVENT_DATE
+to_date(m.START_DATE, 'yyyymmdd hh24:mi:ss') as START_DATE,
+to_date(m.LAST_TKOUT_DATE, 'yyyymmdd hh24:mi:ss') as LAST_TKOUT_DATE,
+to_date(m.STEP_ARRIVE_DATE, 'yyyymmdd hh24:mi:ss') as STEP_ARRIVE_DATE,
+to_date(m.LAST_EVENT_DATE, 'yyyymmdd hh24:mi:ss') as LAST_EVENT_DATE
 from SMICDC_P3NRD.MC_LOT m, p
 where m.PROC_ID in ('K4B1', 'K4B2', 'K4B3', 'K4B4')
 	and m.LOT_STATUS_SEG in ('Active', 'Hold', 'Transferred')
@@ -134,10 +134,10 @@ p.eqp_id,
 p.recipe_id,
 p.tkintype,
 p.tkin_type_detail,
-m.START_DATE,
-m.LAST_TKOUT_DATE,
-m.STEP_ARRIVE_DATE,
-m.LAST_EVENT_DATE
+START_DATE,
+LAST_TKOUT_DATE,
+STEP_ARRIVE_DATE,
+LAST_EVENT_DATE
 from m, p
 where m.delay_step_type='S' 
 	and status<>('RUN')
@@ -169,7 +169,7 @@ select
 u.*,
 nvl(g.grade,'-') as grade
 from u, g
-where u.lot_id = g.lot_id(+) 
+where u.lot_id = g.lot_id(+)
 
 <column list>
 CUR_LINE_ID	VARCHAR2(40)
@@ -198,8 +198,9 @@ EQP_ID	VARCHAR2(40)
 RECIPE_ID	VARCHAR2(40)
 TKINTYPE	VARCHAR2(260)
 TKIN_TYPE_DETAIL	VARCHAR2(40)
-START_DATE	VARCHAR2(18)
-LAST_TKOUT_DATE	VARCHAR2(18)
-STEP_ARRIVE_DATE	VARCHAR2(18)
-LAST_EVENT_DATE	VARCHAR2(18)
+START_DATE	DATE
+LAST_TKOUT_DATE	DATE
+STEP_ARRIVE_DATE	DATE
+LAST_EVENT_DATE	DATE
 GRADE	VARCHAR2(255)
+
