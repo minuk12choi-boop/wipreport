@@ -1,1 +1,44 @@
+<query>
+with
 
+hh as (select
+distinct
+item_type,
+lot_id,
+step_seq,
+hold_user,
+hold_reason,
+hold_date,
+max(hold_date) over (partition by lot_id, step_seq, item_type) as m
+
+from (SELECT
+version_desc,
+max(version_desc) over (partition by version_desc) as m,
+item_type,
+lot_id,
+step_seq,
+hold_user_name as hold_user,
+issue_reason_cont as hold_reason,
+issue_date as hold_date
+FROM MEMMSS.FAB_ISSUE_LOT 
+WHERE LINE_ID IN ('PFR1')
+	and status_seq <> '2') h
+where m=version_desc)
+
+select
+item_type,
+lot_id,
+step_seq,
+hold_user,
+hold_reason,
+hold_date
+from hh
+where m=hold_date
+
+<column list>
+ITEM_TYPE	VARCHAR2(40)
+LOT_ID	VARCHAR2(40)
+STEP_SEQ	VARCHAR2(40)
+HOLD_USER	VARCHAR2(40)
+HOLD_REASON	VARCHAR2(1000)
+HOLD_DATE	DATE
