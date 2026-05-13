@@ -1,1 +1,88 @@
+with
+                t as (SELECT DISTINCT
+                                        t.process, 
+                                        t.step, 
+                                        t.ppid, 
+                                        t.eqpid, 
+                                        (case when t.chamberid in ('-', 'MAIN') then 'MAIN' else chamberid end) as chamberid, 
+                        (case 
+                        when t.type='DOING' then 'DOING' 
+                        when t.type='PREVENT' AND NVL(t.checkcount,0)=0 then 'PREVENT' 
+                        when t.type='PREVENT' AND NVL(t.checkcount,0)>=NVL(checkcount,0) then 'PREVENT' 
+                        when t.type='PREVENT' AND NVL(t.checkcount,0)<NVL(checkcount,0) then 'DOING' 
+                        end) as prevent,
+                                        (case when t.chamberid is not null and t.chamberid not in ('MAIN', '-') then (t.eqpid||'-'||chamberid) else t.eqpid end) as ee,
+                        t.eventtime
+                FROM SMICDC_P3NRD.TRACKINPREVENT t
+                WHERE process in ('K4B1', 'K4B2', 'K4B3', 'K4B4') or (process='-' and type='PREVENT')
+                ),
 
+                tt as (SELECT
+                    t.*,
+                    (count(case when t.prevent = 'DOING' then t.prevent end) OVER (PARTITION BY t.process, t.step, t.ppid, t.ee)) as C,
+                    (count(t.ee) over (partition by t.process, t.step, t.ppid, t.ee)) as CC,
+                    (max(t.eventtime) over (partition by t.process, t.step, t.ppid, t.ee, t.prevent)) as M
+                        FROM t),
+
+                ttt as (SELECT 
+                * 
+                FROM tt
+                WHERE tt.cc>1 and tt.c>0 and tt.prevent='DOING' and tt.m=tt.eventtime
+                    OR tt.cc>1 and tt.c=0 and tt.m=tt.eventtime
+                    OR tt.cc=1),
+
+                te as (SELECT 
+                                        ttt.process, 
+                                        ttt.step, 
+                                        ttt.ppid, 
+                                        ttt.ee,
+                                        ttt.eqpid, 
+                                        ttt.chamberid, 
+                            ttt.prevent,
+                        ttt.eventtime,
+                                        e.batch_kind,
+                                        e.origin_line_id as eqp_line
+                                    FROM ttt
+                                    LEFT JOIN (SELECT DISTINCT
+                                                eqp_id,
+                                                batch_kind,
+                                                origin_line_id
+                                                FROM SMIMES.MI_EQUIPMENT where line_id = 'PFR1') e
+                                        ON ttt.ee = e.eqp_id
+                                    ORDER BY process, step, ppid, ee),
+
+                tee as (SELECT                     
+                                    a.process,
+                                    a.step,
+                                    a.ppid,
+                                    NVL(case when NVL(a.batch_kind, '-') in ('BATCH_FURNACE', 'BATCH_WET') then a.eqpid else b.ee end, a.eqpid) as eqpcham,
+                                    a.eqpid,
+                                    NVL(case when NVL(a.batch_kind, '-') in ('BATCH_FURNACE', 'BATCH_WET') then NULL else b.chamberid end, NULL) as chamberid,
+                                    a.batch_kind,
+                                    (case 
+                        when a.prevent='PREVENT' or b.prevent='PREVENT' then 'PREVENT'
+                                    else 'DOING' end) as prevent,   
+                                    a.prevent as type_body,
+                                    b.prevent as type_cham,          
+           NVL(case when NVL(a.batch_kind, '-') in ('BATCH_FURNACE', 'BATCH_WET') then a.eventtime else b.eventtime end, a.eventtime) as eventtime,
+                                    NVL(a.eqp_line, b.eqp_line) as eqpline
+                                FROM (SELECT * FROM te WHERE chamberid in ('MAIN', '-') or chamberid is null) a
+                                LEFT JOIN (SELECT * FROM te WHERE chamberid not in ('MAIN', '-') and chamberid is not null) b
+                                    ON a.process = b.process
+                                        AND a.step = b.step
+                                        AND a.ppid = b.ppid
+                                        AND a.eqpid = b.eqpid)
+
+select
+process,
+step,
+ppid,
+eqpcham,
+chamberid,
+batch_kind,
+prevent,
+type_body,
+type_cham,
+(case when prevent='PREVENT' then eventtime end) as eventtime,
+eqpline
+ from tee
