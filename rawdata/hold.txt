@@ -1,3 +1,5 @@
+현재 .xlsx 경로: "C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx"
+
 <query>
 with
 
