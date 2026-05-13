@@ -80,7 +80,7 @@ m.cur_qty,
 m.bay_name,
 (case when m.lot_status_seg='Hold' then 'HOLD' else m.step_status_seg end) as status,
 m.proc_id,
-m.order_seq,
+p.order_seq,
 p.sample_step_type,
 p.metal_status,
 p.de_rank,
@@ -88,7 +88,7 @@ p.delay_step_type,
 p.연속,
 p.layer_id,
 p.step_level,
-m.step_seq,
+p.step_seq,
 p.step_desc,
 p.eqp_type,
 p.eqp_group_raw,
@@ -118,7 +118,7 @@ m.cur_qty,
 m.bay_name,
 m.status,
 m.proc_id,
-m.order_seq,
+p.order_seq,
 p.sample_step_type,
 p.metal_status,
 p.de_rank,
@@ -126,7 +126,7 @@ p.delay_step_type,
 p.연속,
 p.layer_id,
 p.step_level,
-m.step_seq,
+P.step_seq,
 p.step_desc,
 p.eqp_type,
 p.eqp_group_raw,
@@ -165,13 +165,14 @@ WHERE h.lot_id = m.lot_id
 where MAX=LOT_TRANSN_TIME)
 
 select
-
+SYSDATE,
 u.*,
 nvl(g.grade,'-') as grade
 from u, g
 where u.lot_id = g.lot_id(+)
 
 <column list>
+SYSDATE	DATE
 CUR_LINE_ID	VARCHAR2(40)
 SYS_LINE_ID	VARCHAR2(40)
 LOT_ID	VARCHAR2(40)
