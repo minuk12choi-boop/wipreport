@@ -47,9 +47,7 @@ with
                                     LEFT JOIN (SELECT DISTINCT
                                                 eqp_id,
                                                 batch_kind,
-                                                origin_line_id,
-				eqp_status,
-				eqp_status_change_time
+                                                origin_line_id
                                                 FROM SMIMES.MI_EQUIPMENT where line_id = 'PFR1') e
                                         ON ttt.ee = e.eqp_id
                                     ORDER BY process, step, ppid, ee),
@@ -90,6 +88,7 @@ select
 process,
 step,
 ppid,
+tee.eqpid,
 tee.eqpcham,
 chamberid,
 batch_kind,
@@ -111,6 +110,7 @@ where tee.eqpcham = es.eqpcham(+)
 PROCESS	VARCHAR2(16)
 STEP	VARCHAR2(16)
 PPID	VARCHAR2(40)
+EQPID	VARCHAR2(16)
 EQPCHAM	VARCHAR2(41)
 CHAMBERID	VARCHAR2(24)
 BATCH_KIND	VARCHAR2(20)
@@ -123,4 +123,3 @@ BODY_EQP_STATUS	VARCHAR2(40)
 CHAM_EQP_STATUS	VARCHAR2(40)
 EQPISSUETIME	DATE
 EQPLINE	VARCHAR2(10)
-
