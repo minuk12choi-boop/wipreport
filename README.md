@@ -1,10 +1,10 @@
 # wipreport
 
 [참조 테이블](*각 txt엔 sql 및 column list가 있음, 모든 date타입 컬럼들은 결과값이 2026-05-13 04:04:22 형태로 나오게 설정해둠.)
-eqp.txt -> eqp as e
-holdtxt -> hold as h
-mclotsteppath.txt -> mcpath as m
-tip.txt -> tip as t
+eqp.txt -> eqp as e ("C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx")
+holdtxt -> hold as h ("C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx")
+mclotsteppath.txt -> mcpath as m ("C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx")
+tip.txt -> tip as t ("C:\Users\minuk12.choi\Documents\zhbm_tip.xlsx")
 
 <'wip' 테이블 만드는 .py파일 만들기>
 *아래는 내가 생각할 수 있는 결과값을 도출해낼 수 있는 방법이다. 이를 python 코드에 맞게 더 효율적으로 빠르고 오류없이 결과를 도출해낼 수 있는 파일로 구현하여야한다.
