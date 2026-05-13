@@ -1,2 +1,1 @@
-PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
-오류: mcpath 파일을 읽는 중 오류가 발생했습니다: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx / Excel file format cannot be determined, you must specify an engine manually.
+python -c "from pathlib import Path; p=Path(r'C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx'); print('exists=',p.exists()); print('size=',p.stat().st_size if p.exists() else None); print('suffix=',p.suffix); print('head=',p.read_bytes()[:80] if p.exists() else None)"
