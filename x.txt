@@ -1,14 +1,3 @@
 PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py                                                               
-[입력 확인] mcpath: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx / size=60084 bytes                                                              
-오류: mcpath 파일은 .xlsx 확장자이지만 표준 xlsx 형식이 아닙니다.
-엑셀에서 파일을 열어 '다른 이름으로 저장 > Excel 통합 문서(.xlsx)'로 다시 저장한 뒤 재실행하세요.
-파일 signature: signature=b'<## NASC', 진단=표준 엑셀 포맷이 아닌 텍스트/기타 파일 가능
-원본 오류: File is not a zip file
-재시도 오류: File is not a zip file
-임시복사 오류: File is not a zip file
-
-PS D:\PERSONAL_SPACE\SW\python> python -c "from pathlib import Path; p=Path(r'C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx'); print('exists=',p.exists()); print('size=',p.stat().st_size if p.exists() else None); print('suffix=',p.suffix); print('head=',p.read_bytes()[:80] if p.exists() else None)"   
-exists= True
-size= 60084
-suffix= .xlsx
-head= b'<## NASCA DRM FILE - VER1.00 ##>\xc37\x97:\xe6\xef&\xadQ\xef\xc6h\xa91_@\x94\x0f\x00\x00\xb2\xe6\xf1\x1c\xbc\x1e1\x1e\xe0\x17\xd5\xa5\xebv\xf0\xbf\xd4\xbf5\xa6V\x91\xcc\xa6j\xe9Wr'
+[입력 확인] mcpath: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv / size=257930 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
+오류: CSV 파일을 지원 인코딩/구분자 조합으로 읽지 못했습니다: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv / 원인: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
