@@ -12,25 +12,32 @@ PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create
 [CSV 읽기 성공] hold: encoding=utf-16, sep=',', rows=46516, cols=6
 [컬럼 확인] hold: ['item_type', 'lot_id', 'step_seq', 'hold_user', 'hold_reason', 'hold_date']
 Traceback (most recent call last):
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3805, in get_loc
-    return self._engine.get_loc(casted_key)
-  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc       
-  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc       
-  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
-  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
-KeyError: 'body_eqp_status_eqp'
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 286, in <module>
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 309, in <module>
     main()
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 269, in main
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 292, in main
     wip = build_wip(mcpath, eqp, tip, hold)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 199, in build_wip
-    met["body_eqp_status"] = met["body_eqp_status"].combine_first(met["body_eqp_status_eqp"])
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\frame.py", line 4102, in __getitem__
-    indexer = self.columns.get_loc(key)
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3812, in get_loc
-    raise KeyError(key) from err
-KeyError: 'body_eqp_status_eqp'
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 258, in build_wip
+    hold_pivot["hold_date"] = hold_pivot[date_cols].min(axis=1) if date_cols else pd.NaT
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\frame.py", line 11643, in min
+    result = super().min(axis, skipna, numeric_only, **kwargs)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\generic.py", line 12388, in min
+    return self._stat_function(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\generic.py", line 12377, in _stat_function
+    return self._reduce(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\frame.py", line 11562, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\internals\managers.py", line 1500, in reduce
+    nbs = blk.reduce(func)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\internals\blocks.py", line 404, in reduce
+    result = func(self.values)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\frame.py", line 11481, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\nanops.py", line 147, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\nanops.py", line 404, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\nanops.py", line 1098, in reduction
+    result = getattr(values, meth)(axis)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\numpy\_core\_methods.py", line 48, in _amin
+    return umr_minimum(a, axis, None, out, keepdims, initial, where)
+TypeError: '<=' not supported between instances of 'float' and 'str'
