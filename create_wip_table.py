@@ -160,30 +160,53 @@ def _unique_join_text(series: pd.Series) -> str | None:
 
 
 def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: pd.DataFrame) -> pd.DataFrame:
+    eqp_renamed = eqp.rename(columns={
+        "body_eqp_status": "eqp_body_eqp_status",
+        "body_status_change_time": "eqp_body_status_change_time",
+        "batch_kind": "eqp_batch_kind",
+        "eqpline": "eqp_eqpline",
+    })
+
     me = mcpath.merge(
-        eqp[["eqp_id", "batch_kind", "eqpline", "body_eqp_status", "body_status_change_time"]],
+        eqp_renamed[["eqp_id", "eqp_batch_kind", "eqp_eqpline", "eqp_body_eqp_status", "eqp_body_status_change_time"]],
         on="eqp_id",
         how="left",
-        suffixes=("", "_eqp"),
     )
 
+    tip_renamed = tip.rename(columns={
+        "body_eqp_status": "tip_body_eqp_status",
+        "cham_eqp_status": "tip_cham_eqp_status",
+        "batch_kind": "tip_batch_kind",
+        "eqpline": "tip_eqpline",
+        "eqpissuetime": "tip_eqpissuetime",
+        "eqpissue": "tip_eqpissue",
+        "eqpcham": "tip_eqpcham",
+        "chamberid": "tip_chamberid",
+        "prevent": "tip_prevent",
+        "type_body": "tip_type_body",
+        "type_cham": "tip_type_cham",
+        "tip_eventtime": "tip_tip_eventtime",
+    })
+
     tip_cols = [
-        "eqpcham", "chamberid", "batch_kind", "prevent", "type_body", "type_cham",
-        "tip_eventtime", "eqpissue", "body_eqp_status", "cham_eqp_status", "eqpissuetime", "eqpline",
+        "tip_eqpcham", "tip_chamberid", "tip_batch_kind", "tip_prevent", "tip_type_body", "tip_type_cham",
+        "tip_tip_eventtime", "tip_eqpissue", "tip_body_eqp_status", "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline",
     ]
 
-    tip_specific = tip[
-        (tip["process"] != "-") & (tip["step"] != "-") & (tip["ppid"] != "-")
+    tip_specific = tip_renamed[
+        (tip_renamed["process"] != "-") & (tip_renamed["step"] != "-") & (tip_renamed["ppid"] != "-")
     ]
     met = me.merge(
         tip_specific,
         left_on=["proc_id", "step_seq", "eqp_id", "recipe_id"],
         right_on=["process", "step", "eqpid", "ppid"],
         how="left",
-        suffixes=("", "_tip"),
     )
 
-    tip_wild = tip[(tip["prevent"] == "PREVENT") & ((tip["process"] == "-") | (tip["step"] == "-") | (tip["ppid"] == "-"))]
+    tip_wild = tip_renamed[
+        (tip_renamed["tip_prevent"] == "PREVENT")
+        & ((tip_renamed["process"] == "-") | (tip_renamed["step"] == "-") | (tip_renamed["ppid"] == "-"))
+    ]
 
     for _, r in tip_wild.iterrows():
         mask = met["eqp_id"].eq(r["eqpid"])
@@ -196,13 +219,13 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
         for c in tip_cols:
             met.loc[mask, c] = r[c]
 
-    met["body_eqp_status"] = met["body_eqp_status"].combine_first(met["body_eqp_status_eqp"])
-    met["batch_kind"] = met["batch_kind"].combine_first(met["batch_kind_eqp"])
-    met["eqpline"] = met["eqpline"].combine_first(met["eqpline_eqp"])
-    met["eqpissuetime"] = met["eqpissuetime"].combine_first(met["body_status_change_time"])
+    met["body_eqp_status"] = met["tip_body_eqp_status"].combine_first(met["eqp_body_eqp_status"])
+    met["batch_kind"] = met["tip_batch_kind"].combine_first(met["eqp_batch_kind"])
+    met["eqpline"] = met["tip_eqpline"].combine_first(met["eqp_eqpline"])
+    met["eqpissuetime"] = met["tip_eqpissuetime"].combine_first(met["eqp_body_status_change_time"])
 
-    fallback_issue = met["body_eqp_status_eqp"].where(met["body_eqp_status_eqp"].isin(["LOCAL", "PM", "DOWN"]))
-    met["eqpissue"] = met["eqpissue"].combine_first(fallback_issue)
+    fallback_issue = met["eqp_body_eqp_status"].where(met["eqp_body_eqp_status"].isin(["LOCAL", "PM", "DOWN"]))
+    met["eqpissue"] = met["tip_eqpissue"].combine_first(fallback_issue)
 
     hold_filtered = hold[hold["item_type"].isin(["EXCEPTION", "HOLD LOT", "FTkinPvLot", "FUTUREHOLD"])].copy()
     hold_filtered["hold_type"] = hold_filtered["item_type"].replace({
