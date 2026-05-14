@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 
+
 EQP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.csv"
 HOLD_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_hold.csv"
 MCPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv"
@@ -153,6 +154,10 @@ def read_input_csv(name: str, path: Path) -> tuple[pd.DataFrame, dict[str, str |
     return df, meta
 
 
+def safe_to_datetime(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series, errors="coerce")
+
+
 def _unique_join_text(series: pd.Series) -> str | None:
     vals = [str(v).strip() for v in series.dropna() if str(v).strip()]
     uniq = list(dict.fromkeys(vals))
@@ -204,7 +209,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     })
     eqp_before = len(eqp_renamed)
     if "body_status_change_time" in eqp_renamed.columns:
-        eqp_renamed["body_status_change_time_dt"] = pd.to_datetime(eqp_renamed["body_status_change_time"], errors="coerce")
+        eqp_renamed["body_status_change_time_dt"] = safe_to_datetime(eqp_renamed["body_status_change_time"])
         if eqp_renamed["body_status_change_time_dt"].notna().any():
             eqp_renamed = eqp_renamed.sort_values("body_status_change_time_dt").drop_duplicates("eqp_id", keep="last")
         else:
@@ -249,8 +254,8 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     tip_specific = tip_renamed[
         (tip_renamed["process"] != "-") & (tip_renamed["step"] != "-") & (tip_renamed["ppid"] != "-")
     ].copy()
-    tip_specific["tip_eventtime_dt"] = pd.to_datetime(tip_specific["tip_tip_eventtime"], errors="coerce")
-    tip_specific["eqpissuetime_dt"] = pd.to_datetime(tip_specific["tip_eqpissuetime"], errors="coerce")
+    tip_specific["tip_eventtime_dt"] = safe_to_datetime(tip_specific["tip_tip_eventtime"])
+    tip_specific["eqpissuetime_dt"] = safe_to_datetime(tip_specific["tip_eqpissuetime"])
     if tip_specific["tip_eventtime_dt"].notna().any() or tip_specific["eqpissuetime_dt"].notna().any():
         tip_specific = tip_specific.sort_values(["tip_eventtime_dt", "eqpissuetime_dt"]).drop_duplicates(
             ["process", "step", "eqpid", "ppid"], keep="last"
@@ -279,8 +284,8 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     tip_wild["specificity"] = (
         (tip_wild["process"] != "-").astype(int) + (tip_wild["step"] != "-").astype(int) + (tip_wild["ppid"] != "-").astype(int)
     )
-    tip_wild["tip_eventtime_dt"] = pd.to_datetime(tip_wild["tip_tip_eventtime"], errors="coerce")
-    tip_wild["eqpissuetime_dt"] = pd.to_datetime(tip_wild["tip_eqpissuetime"], errors="coerce")
+    tip_wild["tip_eventtime_dt"] = safe_to_datetime(tip_wild["tip_tip_eventtime"])
+    tip_wild["eqpissuetime_dt"] = safe_to_datetime(tip_wild["tip_eqpissuetime"])
     tip_wild = tip_wild.reset_index(drop=True)
     tip_wild["_wild_order"] = tip_wild.index
 
@@ -327,64 +332,110 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     fallback_issue = met["eqp_body_eqp_status"].where(met["eqp_body_eqp_status"].isin(["LOCAL", "PM", "DOWN"]))
     met["eqpissue"] = met["tip_eqpissue"].combine_first(fallback_issue)
 
-    hold_filtered = hold.copy()
-    hold_filtered["normalized_item_type"] = hold_filtered["item_type"].fillna("").astype(str).str.strip().str.upper()
-    hold_filtered["category"] = hold_filtered["normalized_item_type"].map({
+    hold_work = hold.copy()
+    hold_work["lot_id"] = hold_work["lot_id"].fillna("").astype(str).str.strip()
+    hold_work["step_seq"] = hold_work["step_seq"].fillna("").astype(str).str.strip()
+    hold_work["item_type"] = hold_work["item_type"].fillna("").astype(str).str.strip().str.upper()
+    hold_work["category"] = hold_work["item_type"].map({
         "EXCEPTION": "예약제외",
         "HOLD LOT": "hold",
         "FUTUREHOLD": "hold",
         "FTKINPVLOT": "ftp",
     })
-    hold_filtered = hold_filtered[hold_filtered["category"].notna()].copy()
-    print("[hold 분류 점검] category counts:")
-    print(hold_filtered["category"].value_counts(dropna=False))
+    hold_valid = hold_work[hold_work["category"].notna()].copy()
+    hold_valid["hold_date"] = safe_to_datetime(hold_valid["hold_date"])
 
-    hold_agg = hold_filtered.groupby(["lot_id", "step_seq", "category"], as_index=False).agg(
-        hold_date=("hold_date", "min"),
-        hold_user=("hold_user", _unique_join_text),
-        hold_reason=("hold_reason", _unique_join_text),
+    print(f"[hold 집계 점검] hold raw rows: {len(hold)}")
+    print(f"[hold 집계 점검] category 적용 rows: {len(hold_valid)}")
+
+    hold_grouped = hold_valid.groupby(["lot_id", "step_seq", "category"], as_index=False).agg(
+        flag=("category", lambda _: "O"),
+        user=("hold_user", _unique_join_text),
+        reason=("hold_reason", _unique_join_text),
+        date=("hold_date", "min"),
     )
-    hold_agg["flag"] = "O"
-    print(f"[행수 점검] hold 집계 후 rows: {len(hold_agg)}")
+    print(f"[hold 집계 점검] grouped lot_id+step_seq+category rows: {len(hold_grouped)}")
 
-    hold_pivot = hold_agg.pivot_table(
-        index=["lot_id", "step_seq"],
-        columns="category",
-        values=["flag", "hold_date", "hold_user", "hold_reason"],
-        aggfunc="first",
-    )
-    hold_pivot.columns = [f"{k}_{t}" for k, t in hold_pivot.columns]
-    hold_pivot = hold_pivot.reset_index()
-    hold_pivot = hold_pivot.rename(columns={
-        "flag_예약제외": "예약제외", "hold_user_예약제외": "예약제외_user", "hold_reason_예약제외": "예약제외_reason", "hold_date_예약제외": "예약제외_date",
-        "flag_hold": "hold", "hold_user_hold": "hold_user", "hold_reason_hold": "hold_reason", "hold_date_hold": "hold_date",
-        "flag_ftp": "ftp", "hold_user_ftp": "ftp_user", "hold_reason_ftp": "ftp_reason", "hold_date_ftp": "ftp_date",
-    })
-    dup_hold_summary = hold_pivot.duplicated(subset=["lot_id", "step_seq"]).sum()
-    print(f"[hold 점검] hold_summary lot_id+step_seq 중복 rows: {dup_hold_summary}")
-    both3 = ((hold_pivot.get("예약제외") == "O") & (hold_pivot.get("hold") == "O") & (hold_pivot.get("ftp") == "O")).fillna(False)
-    print(f"[hold 점검] hold/ftp/예약제외 모두 O rows: {int(both3.sum())}")
-    if both3.any():
-        source_types = hold_filtered.groupby(["lot_id", "step_seq"])["category"].apply(lambda s: set(s.tolist())).to_dict()
-        for _, r in hold_pivot.loc[both3, ["lot_id", "step_seq"]].iterrows():
-            cats = source_types.get((r["lot_id"], r["step_seq"]), set())
-            if cats != {"예약제외", "hold", "ftp"}:
-                raise WipBuildError(
-                    f"hold flag 검증 실패.\nlot_id={r['lot_id']}, step_seq={r['step_seq']}\n"
-                    f"원천 category={sorted(cats)}\n결과 flag=['예약제외', 'hold', 'ftp']\n원천에 없는 category가 결과에 표시되었습니다."
-                )
+    def build_category_part(category: str, prefix: str) -> pd.DataFrame:
+        part = hold_grouped.loc[hold_grouped["category"] == category, ["lot_id", "step_seq", "flag", "user", "reason", "date"]].copy()
+        dup = int(part.duplicated(["lot_id", "step_seq"], keep=False).sum())
+        if dup:
+            raise WipBuildError(f"{prefix} part 생성 중 lot_id+step_seq 중복 {dup}건이 발견되었습니다.")
+        return part.rename(columns={
+            "flag": prefix,
+            "user": f"{prefix}_user",
+            "reason": f"{prefix}_reason",
+            "date": f"{prefix}_date",
+        })
 
-    non_run = met["status"] != "RUN"
-    meth = met.copy()
-    before_rows = len(meth)
-    joined = meth.loc[non_run].merge(hold_pivot, on=["lot_id", "step_seq"], how="left")
-    meth = meth.merge(joined[["lot_id", "order_seq", "step_seq"] + [c for c in joined.columns if c not in meth.columns]],
-                      on=["lot_id", "order_seq", "step_seq"], how="left")
+    part_exc = build_category_part("예약제외", "예약제외")
+    part_hold = build_category_part("hold", "hold")
+    part_ftp = build_category_part("ftp", "ftp")
+
+    hold_summary = part_exc.merge(part_hold, on=["lot_id", "step_seq"], how="outer", validate="one_to_one")
+    hold_summary = hold_summary.merge(part_ftp, on=["lot_id", "step_seq"], how="outer", validate="one_to_one")
+
+    dup_hold_summary = int(hold_summary.duplicated(["lot_id", "step_seq"], keep=False).sum())
+    print(f"[hold 집계 점검] 최종 hold_summary rows: {len(hold_summary)}")
+    print(f"[hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: {dup_hold_summary}")
+    if dup_hold_summary != 0:
+        raise WipBuildError(f"hold_summary lot_id+step_seq 중복 rows가 {dup_hold_summary}건입니다.")
+
+    source_categories = hold_valid.groupby(["lot_id", "step_seq"])["category"].apply(set).to_dict()
+
+    def extract_flags(row: pd.Series) -> set[str]:
+        flags: set[str] = set()
+        if row.get("예약제외") == "O":
+            flags.add("예약제외")
+        if row.get("hold") == "O":
+            flags.add("hold")
+        if row.get("ftp") == "O":
+            flags.add("ftp")
+        return flags
+
+    hold_summary["_result_flags"] = hold_summary.apply(extract_flags, axis=1)
+    flag_errors: list[tuple[str, str, set[str], set[str]]] = []
+    for _, row in hold_summary[["lot_id", "step_seq", "_result_flags"]].iterrows():
+        key = (row["lot_id"], row["step_seq"])
+        src = source_categories.get(key, set())
+        extra = row["_result_flags"] - src
+        if extra:
+            flag_errors.append((row["lot_id"], row["step_seq"], src, row["_result_flags"]))
+
+    print(f"[hold flag 점검] source keys: {len(source_categories)}, result keys: {len(hold_summary)}")
+    print(f"[hold flag 점검] 원천에 없는 category를 포함한 결과 rows: {len(flag_errors)}")
+    if flag_errors:
+        samples = flag_errors[:10]
+        sample_text = "\n".join(
+            f"- lot_id={lot}, step_seq={step}, 원천 category={sorted(src)}, 결과 flag={sorted(dst)}"
+            for lot, step, src, dst in samples
+        )
+        raise WipBuildError(f"hold flag 검증 실패. 원천에 없는 category가 결과에 표시되었습니다.\n샘플(최대 10건):\n{sample_text}")
+    hold_summary = hold_summary.drop(columns=["_result_flags"])
+
+    met["lot_id"] = met["lot_id"].fillna("").astype(str).str.strip()
+    met["step_seq"] = met["step_seq"].fillna("").astype(str).str.strip()
+    hold_summary["lot_id"] = hold_summary["lot_id"].fillna("").astype(str).str.strip()
+    hold_summary["step_seq"] = hold_summary["step_seq"].fillna("").astype(str).str.strip()
+
+    left_keys = met[["lot_id", "step_seq"]].drop_duplicates()
+    right_keys = hold_summary[["lot_id", "step_seq"]].drop_duplicates()
+    overlap = left_keys.merge(right_keys, on=["lot_id", "step_seq"], how="inner").shape[0]
+    print(f"[hold merge 점검] met rows: {len(met)}")
+    print(f"[hold merge 점검] met unique lot_id+step_seq: {len(left_keys)}")
+    print(f"[hold merge 점검] met lot_id+step_seq duplicated rows: {int(met.duplicated(['lot_id', 'step_seq'], keep=False).sum())}")
+    print(f"[hold merge 점검] hold_summary rows: {len(hold_summary)}")
+    print(f"[hold merge 점검] hold_summary columns: {hold_summary.columns.tolist()}")
+    print(f"[hold merge 점검] hold_summary duplicate key rows: {int(hold_summary.duplicated(['lot_id', 'step_seq'], keep=False).sum())}")
+    print(f"[hold merge 점검] key overlap unique count: {overlap}")
+
+    met_before = len(met)
+    meth = met.merge(hold_summary, on=["lot_id", "step_seq"], how="left", validate="m:1")
     after_rows = len(meth)
     print(f"[행수 점검] hold merge 후 rows: {after_rows}")
     print(f"[중복 점검] hold merge 후 완전중복 rows: {meth.duplicated().sum()}")
-    if after_rows != before_rows:
-        raise WipBuildError(f"hold merge 후 행 수가 증가했습니다. before={before_rows}, after={after_rows}. hold 집계/조인 로직을 확인하세요.")
+    if after_rows != met_before:
+        raise WipBuildError(f"hold merge 후 행 수가 증가했습니다. before={met_before}, after={after_rows}. hold 집계/조인 로직을 확인하세요.")
     meth = meth.drop(columns=["_row_id"], errors="ignore")
     print(f"[행수 점검] 최종 wip rows: {len(meth)}")
     print(f"[중복 점검] 최종 wip 완전중복 rows: {meth.duplicated().sum()}")
