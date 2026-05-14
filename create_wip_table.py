@@ -159,7 +159,26 @@ def _unique_join_text(series: pd.Series) -> str | None:
     return " | ".join(uniq) if uniq else None
 
 
+def convert_datetime_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    out = df.copy()
+    for col in columns:
+        if col in out.columns:
+            cleaned = out[col].replace(r"^\s*$", pd.NA, regex=True)
+            cleaned = cleaned.replace(["nan", "NaN", "nat", "NaT", "None"], pd.NA)
+            out[col] = pd.to_datetime(cleaned, errors="coerce")
+    return out
+
+
 def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: pd.DataFrame) -> pd.DataFrame:
+    mcpath = convert_datetime_columns(
+        mcpath, ["sysdate", "start_date", "last_tkout_date", "step_arrive_date", "last_event_date"]
+    )
+    eqp = convert_datetime_columns(eqp, ["body_status_change_time"])
+    tip = convert_datetime_columns(tip, ["tip_eventtime", "eqpissuetime"])
+    hold = convert_datetime_columns(hold, ["hold_date"])
+    if "hold_date" in hold.columns:
+        print(f"[날짜 변환] hold.hold_date 변환 완료: 유효 {hold['hold_date'].notna().sum()}건 / 전체 {len(hold)}건")
+
     eqp_renamed = eqp.rename(columns={
         "body_eqp_status": "eqp_body_eqp_status",
         "body_status_change_time": "eqp_body_status_change_time",
@@ -255,7 +274,12 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
             hold_pivot[t] = "O"
 
     date_cols = [c for c in hold_pivot.columns if c.startswith("hold_date_")]
-    hold_pivot["hold_date"] = hold_pivot[date_cols].min(axis=1) if date_cols else pd.NaT
+    if date_cols:
+        for col in date_cols:
+            hold_pivot[col] = pd.to_datetime(hold_pivot[col], errors="coerce")
+        hold_pivot["hold_date"] = hold_pivot[date_cols].min(axis=1, skipna=True)
+    else:
+        hold_pivot["hold_date"] = pd.NaT
 
     hold_pivot = hold_pivot.rename(columns={
         "hold_user_예약제외": "예약제외_user",
