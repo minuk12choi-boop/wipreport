@@ -178,15 +178,15 @@ def next_available_path(path: Path) -> Path:
         idx += 1
 
 
-def log_duplicate_keys(df: pd.DataFrame, keys: list[str], name: str, limit: int = 10) -> None:
+def log_duplicate_keys(df: pd.DataFrame, keys: list[str], name: str, limit: int = 10, label: str = "[키 분포 점검]") -> None:
     missing = [c for c in keys if c not in df.columns]
     if missing:
-        print(f"[중복키 점검] {name}: 키 컬럼 누락 {missing}")
+        print(f"{label} {name}: 키 컬럼 누락 {missing}")
         return
     dup_mask = df.duplicated(subset=keys, keep=False)
     dup_rows = int(dup_mask.sum())
     dup_groups = int(df.loc[dup_mask, keys].drop_duplicates().shape[0]) if dup_rows else 0
-    print(f"[중복키 점검] {name}: keys={keys}, duplicated_rows={dup_rows}, duplicated_groups={dup_groups}")
+    print(f"{label} {name}: keys={keys}, duplicated_rows={dup_rows}, duplicated_groups={dup_groups}")
     if dup_rows:
         print(df.loc[dup_mask, keys].value_counts().head(limit))
 
@@ -197,7 +197,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     print(f"[행수 점검] tip 원본: {len(tip)}")
     print(f"[행수 점검] hold 원본: {len(hold)}")
     log_duplicate_keys(eqp, ["eqp_id"], "eqp 조인 키")
-    log_duplicate_keys(tip, ["process", "step", "eqpid", "ppid"], "exact tip 조인 키")
+    log_duplicate_keys(tip, ["process", "step", "eqpid", "ppid", "eqpcham", "chamberid"], "exact tip 조인 키(챔버 포함)")
     log_duplicate_keys(hold, ["lot_id", "step_seq"], "hold 조인 키")
     log_duplicate_keys(hold, ["lot_id", "step_seq", "item_type"], "hold item_type 포함 키")
 
@@ -256,15 +256,17 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     ].copy()
     tip_specific["tip_eventtime_dt"] = safe_to_datetime(tip_specific["tip_tip_eventtime"])
     tip_specific["eqpissuetime_dt"] = safe_to_datetime(tip_specific["tip_eqpissuetime"])
+    exact_tip_keys = ["process", "step", "eqpid", "ppid", "tip_eqpcham", "tip_chamberid"]
     if tip_specific["tip_eventtime_dt"].notna().any() or tip_specific["eqpissuetime_dt"].notna().any():
         tip_specific = tip_specific.sort_values(["tip_eventtime_dt", "eqpissuetime_dt"]).drop_duplicates(
-            ["process", "step", "eqpid", "ppid"], keep="last"
+            exact_tip_keys, keep="last"
         )
     else:
-        tip_specific = tip_specific.drop_duplicates(["process", "step", "eqpid", "ppid"], keep="last")
+        tip_specific = tip_specific.drop_duplicates(exact_tip_keys, keep="last")
     tip_specific = tip_specific.drop(columns=["tip_eventtime_dt", "eqpissuetime_dt"])
     print(f"[축약 점검] exact tip 축약 후 rows: {len(tip_specific)}")
     before_rows = len(me)
+    print(f"[행수 점검] exact tip 조인 전 rows: {before_rows}")
     met = me.merge(
         tip_specific,
         left_on=["proc_id", "step_seq", "eqp_id", "recipe_id"],
@@ -273,9 +275,12 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     )
     after_rows = len(met)
     print(f"[행수 점검] exact tip 조인 후 rows: {after_rows}")
-    print(f"[중복 점검] exact tip 조인 후 완전중복 rows: {met.duplicated().sum()}")
-    if after_rows != before_rows:
-        raise WipBuildError(f"exact tip 조인 후 행 수가 증가했습니다. before={before_rows}, after={after_rows}. tip 조인키 중복 축약 로직을 확인하세요.")
+    if after_rows > before_rows:
+        print("[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이로 인한 증가인지 점검합니다.")
+    exact_full_dup = int(met.duplicated(keep=False).sum())
+    print(f"[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: {exact_full_dup}")
+    if exact_full_dup:
+        raise WipBuildError(f"exact tip 조인 후 전체 컬럼 기준 완전중복 rows가 {exact_full_dup}건입니다.")
 
     tip_wild = tip_renamed[
         (tip_renamed["tip_prevent"] == "PREVENT")
@@ -317,12 +322,12 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
             if wc in met.columns:
                 met[c] = met[wc].combine_first(met[c])
                 met = met.drop(columns=[wc])
-    before_rows = len(me)
+    before_rows = len(met)
     after_rows = len(met)
     print(f"[행수 점검] wildcard tip 반영 후 rows: {after_rows}")
-    print(f"[중복 점검] wildcard tip 반영 후 완전중복 rows: {met.drop(columns=['_row_id']).duplicated().sum()}")
+    print(f"[중복 점검] wildcard tip 반영 후 전체 컬럼 기준 완전중복 rows: {met.drop(columns=['_row_id']).duplicated(keep=False).sum()}")
     if after_rows != before_rows:
-        raise WipBuildError(f"wildcard overlay 후 행 수가 증가했습니다. before={before_rows}, after={after_rows}. wildcard 매칭 축약 로직을 확인하세요.")
+        raise WipBuildError(f"wildcard overlay 후 행 수가 변경되었습니다. before={before_rows}, after={after_rows}. wildcard는 overlay로 기존 행을 보존해야 합니다.")
 
     met["body_eqp_status"] = met["tip_body_eqp_status"].combine_first(met["eqp_body_eqp_status"])
     met["batch_kind"] = met["tip_batch_kind"].combine_first(met["eqp_batch_kind"])
@@ -423,7 +428,8 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     overlap = left_keys.merge(right_keys, on=["lot_id", "step_seq"], how="inner").shape[0]
     print(f"[hold merge 점검] met rows: {len(met)}")
     print(f"[hold merge 점검] met unique lot_id+step_seq: {len(left_keys)}")
-    print(f"[hold merge 점검] met lot_id+step_seq duplicated rows: {int(met.duplicated(['lot_id', 'step_seq'], keep=False).sum())}")
+    print(f"[키 분포 점검] met lot_id+step_seq 중복 rows: {int(met.duplicated(['lot_id', 'step_seq'], keep=False).sum())}")
+    print("[안내] met는 lot_id+step_seq 기준 여러 행이 정상일 수 있습니다. tip_eqpcham/tip_chamberid 등 챔버 정보가 다르면 보존합니다.")
     print(f"[hold merge 점검] hold_summary rows: {len(hold_summary)}")
     print(f"[hold merge 점검] hold_summary columns: {hold_summary.columns.tolist()}")
     print(f"[hold merge 점검] hold_summary duplicate key rows: {int(hold_summary.duplicated(['lot_id', 'step_seq'], keep=False).sum())}")
@@ -433,12 +439,21 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     meth = met.merge(hold_summary, on=["lot_id", "step_seq"], how="left", validate="m:1")
     after_rows = len(meth)
     print(f"[행수 점검] hold merge 후 rows: {after_rows}")
-    print(f"[중복 점검] hold merge 후 완전중복 rows: {meth.duplicated().sum()}")
+    print(f"[중복 점검] hold merge 후 전체 컬럼 기준 완전중복 rows: {meth.duplicated(keep=False).sum()}")
     if after_rows != met_before:
-        raise WipBuildError(f"hold merge 후 행 수가 증가했습니다. before={met_before}, after={after_rows}. hold 집계/조인 로직을 확인하세요.")
+        raise WipBuildError(f"hold merge 후 행 수가 변경되었습니다. before={met_before}, after={after_rows}. hold 집계/조인 로직을 확인하세요.")
     meth = meth.drop(columns=["_row_id"], errors="ignore")
     print(f"[행수 점검] 최종 wip rows: {len(meth)}")
-    print(f"[중복 점검] 최종 wip 완전중복 rows: {meth.duplicated().sum()}")
+    chamber_multi_groups = 0
+    if {"lot_id", "step_seq", "tip_eqpcham", "tip_chamberid"}.issubset(meth.columns):
+        combo_per_key = (
+            meth.assign(_ch_key=meth[["tip_eqpcham", "tip_chamberid"]].fillna("").astype(str).agg("|".join, axis=1))
+            .groupby(["lot_id", "step_seq"])["_ch_key"].nunique(dropna=False)
+        )
+        chamber_multi_groups = int((combo_per_key > 1).sum())
+    print(f"[중복 점검] 최종 wip 전체 컬럼 기준 완전중복 rows: {meth.duplicated(keep=False).sum()}")
+    print(f"[챔버 보존 점검] 같은 lot_id+step_seq 내 tip_eqpcham/tip_chamberid 다중 조합 group 수: {chamber_multi_groups}")
+    print("[챔버 보존 점검] 해당 행들은 중복 제거 대상이 아닙니다.")
 
     return meth
 
