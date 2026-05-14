@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import shutil
-import tempfile
-import time
 from pathlib import Path
 
 import pandas as pd
 
 
-EQP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.xlsx"
-HOLD_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_hold.xlsx"
-MCPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.xlsx"
-TIP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_tip.xlsx"
+EQP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.csv"
+HOLD_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_hold.csv"
+MCPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv"
+TIP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_tip.csv"
 
 REQUIRED_COLUMNS = {
     "mcpath": [
@@ -45,6 +42,9 @@ REQUIRED_COLUMNS = {
     "hold": ["item_type", "lot_id", "step_seq", "hold_user", "hold_reason", "hold_date"],
 }
 
+ENCODING_CANDIDATES = ["utf-8-sig", "cp949", "euc-kr", "utf-8"]
+SEP_CANDIDATES = [",", "\t", "|", ";"]
+
 
 class WipBuildError(Exception):
     pass
@@ -59,83 +59,79 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 def _assert_required_columns(df: pd.DataFrame, name: str) -> None:
     missing = [c for c in REQUIRED_COLUMNS[name] if c not in df.columns]
     if missing:
-        raise WipBuildError(f"{name} 파일에 필요한 컬럼이 없습니다: {missing}")
+        raise WipBuildError(f"필수 컬럼 누락: {name}에 {', '.join(missing)} 컬럼이 없습니다.")
 
 
-def _load_excel(name: str, path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise WipBuildError(f"원천 파일이 존재하지 않습니다: {path}")
-    size = path.stat().st_size
-    print(f"[입력 확인] {name}: {path} / size={size} bytes")
-    if size == 0:
-        raise WipBuildError(f"{name} 파일 크기가 0입니다. 쿼리 결과 파일이 정상 저장되지 않았습니다.")
+def _detect_sep(path: Path) -> str:
+    head = path.read_bytes()[:8192]
+    best_sep = SEP_CANDIDATES[0]
+    best_score = -1
 
-    suffix = path.suffix.lower()
-    if suffix == ".xlsx":
-        engine = "openpyxl"
-    elif suffix == ".xls":
-        engine = "xlrd"
-    else:
-        raise WipBuildError(
-            f"{name} 파일 확장자를 지원하지 않습니다: {suffix} (.xlsx 또는 .xls만 지원)"
-        )
-
-    def _read_once(target: Path) -> pd.DataFrame:
-        return pd.read_excel(target, engine=engine)
-
-    def _file_signature(target: Path, read_size: int = 512) -> tuple[bytes, bytes]:
-        with open(target, "rb") as f:
-            head = f.read(read_size)
-        return head[:8], head.lstrip().lower()[:32]
-
-    def _diagnose_signature(target: Path) -> str:
-        sig8, sig_text = _file_signature(target)
-        if sig8.startswith(b"PK"):
-            guessed = "ZIP 컨테이너(표준 .xlsx 가능)"
-        elif sig8.startswith(b"\xD0\xCF\x11\xE0"):
-            guessed = "OLE 컨테이너(구형 .xls 가능)"
-        elif sig_text.startswith(b"<html") or sig_text.startswith(b"<!doctype html"):
-            guessed = "HTML 파일 가능"
-        else:
-            guessed = "표준 엑셀 포맷이 아닌 텍스트/기타 파일 가능"
-        return f"signature={sig8!r}, 진단={guessed}"
-
-    try:
-        df = _read_once(path)
-    except Exception as exc:
-        # csv_merge.py의 핵심 원리 중 "원본 직접 읽기 실패 시 임시 복사본으로 재시도"를
-        # 인코딩이 아닌 파일 잠금/동기화 이슈 대응 목적에 한해 .xlsx 읽기에도 최소 범위로 적용한다.
-        time.sleep(0.2)
+    for enc in ENCODING_CANDIDATES:
         try:
-            df = _read_once(path)
-        except Exception as retry_exc:
-            tmp_file: Path | None = None
+            text = head.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        for sep in SEP_CANDIDATES:
+            score = text.count(sep)
+            if score > best_score:
+                best_sep = sep
+                best_score = score
+
+    return best_sep
+
+
+def _read_csv_with_fallback(path: Path, first_sep: str) -> tuple[pd.DataFrame, str, str]:
+    sep_order = [first_sep] + [s for s in SEP_CANDIDATES if s != first_sep]
+    last_error: Exception | None = None
+    for enc in ENCODING_CANDIDATES:
+        for sep in sep_order:
             try:
-                with tempfile.TemporaryDirectory(prefix="wip_excel_read_") as tmp_dir:
-                    tmp_file = Path(tmp_dir) / path.name
-                    shutil.copy2(path, tmp_file)
-                    df = _read_once(tmp_file)
-            except Exception as tmp_exc:
-                sig_msg = _diagnose_signature(path)
-                if suffix == ".xlsx":
-                    sig8, _ = _file_signature(path)
-                    if not sig8.startswith(b"PK"):
-                        raise WipBuildError(
-                            f"{name} 파일은 .xlsx 확장자이지만 표준 xlsx 형식이 아닙니다.\n"
-                            "엑셀에서 파일을 열어 '다른 이름으로 저장 > Excel 통합 문서(.xlsx)'로 다시 저장한 뒤 재실행하세요.\n"
-                            f"파일 signature: {sig_msg}\n"
-                            f"원본 오류: {exc}\n재시도 오류: {retry_exc}\n임시복사 오류: {tmp_exc}"
-                        ) from tmp_exc
-                raise WipBuildError(
-                    f"{name} 파일을 읽는 중 오류가 발생했습니다: {path}\n"
-                    f"- 원본 읽기 오류: {exc}\n"
-                    f"- 재시도 오류: {retry_exc}\n"
-                    f"- 임시복사 읽기 오류: {tmp_exc}\n"
-                    f"- 파일 형식 진단: {sig_msg}"
-                ) from tmp_exc
+                df = pd.read_csv(
+                    path,
+                    encoding=enc,
+                    sep=sep,
+                    dtype=str,
+                    engine="python",
+                    on_bad_lines="skip",
+                )
+                if len(df.columns) <= 1 and path.stat().st_size > 0:
+                    continue
+                return df, enc, sep
+            except Exception as exc:  # noqa: PERF203
+                last_error = exc
+    raise WipBuildError(f"CSV 파일을 지원 인코딩/구분자 조합으로 읽지 못했습니다: {path} / 원인: {last_error}")
+
+
+def read_input_csv(name: str, path: Path) -> tuple[pd.DataFrame, dict[str, str | int]]:
+    if not path.exists():
+        raise WipBuildError(f"원천 CSV 파일이 존재하지 않습니다: {path}")
+
+    size = path.stat().st_size
+    if size == 0:
+        raise WipBuildError(f"{name} CSV 파일 크기가 0입니다.")
+
+    head = path.read_bytes()[:256]
+    print(f"[입력 확인] {name}: {path} / size={size} bytes / signature={head[:64]!r}")
+
+    if head.startswith(b"<## NASCA DRM FILE - VER1.00 ##>"):
+        raise WipBuildError(f"{name} 파일이 NASCA DRM 파일입니다. CSV로 다시 저장된 일반 텍스트 파일이 아닙니다.")
+
+    first_sep = _detect_sep(path)
+    df, encoding, sep = _read_csv_with_fallback(path, first_sep)
     df = _normalize_columns(df)
     _assert_required_columns(df, name)
-    return df
+
+    meta = {
+        "path": str(path),
+        "size": size,
+        "rows": len(df),
+        "cols": len(df.columns),
+        "encoding": encoding,
+        "separator": repr(sep),
+    }
+    print(f"[CSV 로딩 성공] {name}: encoding={encoding}, sep={repr(sep)}, rows={len(df)}, cols={len(df.columns)}")
+    return df, meta
 
 
 def _unique_join_text(series: pd.Series) -> str | None:
@@ -246,26 +242,22 @@ def main() -> None:
         "tip": Path(TIP_PATH),
     }
 
-    mcpath = _load_excel("mcpath", paths["mcpath"])
-    eqp = _load_excel("eqp", paths["eqp"])
-    tip = _load_excel("tip", paths["tip"])
-    hold = _load_excel("hold", paths["hold"])
+    mcpath, mcpath_meta = read_input_csv("mcpath", paths["mcpath"])
+    eqp, eqp_meta = read_input_csv("eqp", paths["eqp"])
+    tip, tip_meta = read_input_csv("tip", paths["tip"])
+    hold, hold_meta = read_input_csv("hold", paths["hold"])
 
     wip = build_wip(mcpath, eqp, tip, hold)
 
     output_path = script_dir / "output_wip.xlsx"
-    wip.to_excel(output_path, index=False)
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        wip.to_excel(writer, index=False)
 
-    print("[입력 파일 경로]")
-    print(f"- eqp: {paths['eqp']}")
-    print(f"- hold: {paths['hold']}")
-    print(f"- mcpath: {paths['mcpath']}")
-    print(f"- tip: {paths['tip']}")
-    print("[입력 row 수]")
-    print(f"- mcpath: {len(mcpath)}")
-    print(f"- eqp: {len(eqp)}")
-    print(f"- tip: {len(tip)}")
-    print(f"- hold: {len(hold)}")
+    print("[입력 파일 요약]")
+    for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("mcpath", mcpath_meta), ("tip", tip_meta)]:
+        print(f"- {name} path: {meta['path']}")
+        print(f"  size={meta['size']} bytes, rows={meta['rows']}, cols={meta['cols']}, encoding={meta['encoding']}, sep={meta['separator']}")
+
     print(f"[wip] row={len(wip)}, col={len(wip.columns)}")
     print(f"저장 완료: {output_path}")
 
