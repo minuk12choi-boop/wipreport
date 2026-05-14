@@ -1,3 +1,36 @@
-PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py                                                               
+PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
 [입력 확인] mcpath: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv / size=257930 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
-오류: CSV 파일을 지원 인코딩/구분자 조합으로 읽지 못했습니다: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv / 원인: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
+[CSV 읽기 성공] mcpath: encoding=utf-16, sep=',', rows=470, cols=32
+[컬럼 확인] mcpath: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_id', 'carr_id', 'grade', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id', 'order_seq', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', '연속', 'layer_id', 'step_level', 'step_seq', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date']
+[입력 확인] eqp: C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.csv / size=219948 bytes / signature=b'\xff\xfeE\x00Q\x00P\x00_\x00I\x00D\x00,\x00B\x00O\x00D\x00Y\x00_\x00E\x00Q\x00P\x00_\x00S\x00T\x00A\x00T\x00U\x00S\x00,\x00B\x00O\x00D\x00Y\x00_\x00S\x00T\x00A\x00'
+[CSV 읽기 성공] eqp: encoding=utf-16, sep=',', rows=1978, cols=5
+[컬럼 확인] eqp: ['eqp_id', 'body_eqp_status', 'body_status_change_time', 'batch_kind', 'eqpline']
+[입력 확인] tip: C:\Users\minuk12.choi\Documents\zhbm_tip.csv / size=1321280 bytes / signature=b'\xff\xfeP\x00R\x00O\x00C\x00E\x00S\x00S\x00,\x00S\x00T\x00E\x00P\x00,\x00P\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00C\x00H\x00A\x00M\x00'
+[CSV 읽기 성공] tip: encoding=utf-16, sep=',', rows=6902, cols=16
+[컬럼 확인] tip: ['process', 'step', 'ppid', 'eqpid', 'eqpcham', 'chamberid', 'batch_kind', 'prevent', 'type_body', 'type_cham', 'tip_eventtime', 'eqpissue', 'body_eqp_status', 'cham_eqp_status', 'eqpissuetime', 'eqpline']
+[입력 확인] hold: C:\Users\minuk12.choi\Documents\zhbm_hold.csv / size=12321118 bytes / signature=b'\xff\xfeI\x00T\x00E\x00M\x00_\x00T\x00Y\x00P\x00E\x00,\x00L\x00O\x00T\x00_\x00I\x00D\x00,\x00S\x00T\x00E\x00P\x00_\x00S\x00E\x00Q\x00,\x00H\x00O\x00L\x00D\x00_\x00'
+[CSV 읽기 성공] hold: encoding=utf-16, sep=',', rows=46516, cols=6
+[컬럼 확인] hold: ['item_type', 'lot_id', 'step_seq', 'hold_user', 'hold_reason', 'hold_date']
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc       
+  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc       
+  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas\\_libs\\hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'body_eqp_status_eqp'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 286, in <module>
+    main()
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 269, in main
+    wip = build_wip(mcpath, eqp, tip, hold)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 199, in build_wip
+    met["body_eqp_status"] = met["body_eqp_status"].combine_first(met["body_eqp_status_eqp"])
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: 'body_eqp_status_eqp'

@@ -42,7 +42,7 @@ REQUIRED_COLUMNS = {
     "hold": ["item_type", "lot_id", "step_seq", "hold_user", "hold_reason", "hold_date"],
 }
 
-ENCODING_CANDIDATES = ["utf-8-sig", "cp949", "euc-kr", "utf-8"]
+ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "utf-8"]
 SEP_CANDIDATES = [",", "\t", "|", ";"]
 
 
@@ -62,12 +62,27 @@ def _assert_required_columns(df: pd.DataFrame, name: str) -> None:
         raise WipBuildError(f"필수 컬럼 누락: {name}에 {', '.join(missing)} 컬럼이 없습니다.")
 
 
-def _detect_sep(path: Path) -> str:
+def _build_encoding_order(signature: bytes) -> list[str]:
+    if signature.startswith(b"\xff\xfe"):
+        preferred = ["utf-16", "utf-16-le"]
+    elif signature.startswith(b"\xfe\xff"):
+        preferred = ["utf-16", "utf-16-be"]
+    else:
+        preferred = []
+
+    ordered: list[str] = []
+    for enc in preferred + ENCODING_CANDIDATES:
+        if enc not in ordered:
+            ordered.append(enc)
+    return ordered
+
+
+def _detect_sep(path: Path, encoding_order: list[str]) -> str:
     head = path.read_bytes()[:8192]
     best_sep = SEP_CANDIDATES[0]
     best_score = -1
 
-    for enc in ENCODING_CANDIDATES:
+    for enc in encoding_order:
         try:
             text = head.decode(enc)
         except UnicodeDecodeError:
@@ -81,26 +96,28 @@ def _detect_sep(path: Path) -> str:
     return best_sep
 
 
-def _read_csv_with_fallback(path: Path, first_sep: str) -> tuple[pd.DataFrame, str, str]:
+def _read_csv_with_fallback(path: Path, first_sep: str, encoding_order: list[str]) -> tuple[pd.DataFrame, str, str]:
     sep_order = [first_sep] + [s for s in SEP_CANDIDATES if s != first_sep]
-    last_error: Exception | None = None
-    for enc in ENCODING_CANDIDATES:
+    failed_cases: list[tuple[str, str, str]] = []
+    for enc in encoding_order:
         for sep in sep_order:
             try:
-                df = pd.read_csv(
-                    path,
-                    encoding=enc,
-                    sep=sep,
-                    dtype=str,
-                    engine="python",
-                    on_bad_lines="skip",
-                )
+                df = pd.read_csv(path, encoding=enc, sep=sep, dtype=str)
                 if len(df.columns) <= 1 and path.stat().st_size > 0:
+                    failed_cases.append((enc, repr(sep), "컬럼이 1개 이하로 읽혀 구분자 불일치 가능성"))
                     continue
                 return df, enc, sep
             except Exception as exc:  # noqa: PERF203
-                last_error = exc
-    raise WipBuildError(f"CSV 파일을 지원 인코딩/구분자 조합으로 읽지 못했습니다: {path} / 원인: {last_error}")
+                failed_cases.append((enc, repr(sep), str(exc)))
+
+    summary_lines = []
+    for enc, sep, reason in failed_cases[:8]:
+        summary_lines.append(f"- encoding={enc}, sep={sep} -> {reason}")
+    summary_text = "\n".join(summary_lines) if summary_lines else "- 시도 내역이 기록되지 않았습니다."
+    raise WipBuildError(
+        f"CSV 파일을 지원 인코딩/구분자 조합으로 읽지 못했습니다: {path}\n"
+        f"[실패 요약 일부]\n{summary_text}"
+    )
 
 
 def read_input_csv(name: str, path: Path) -> tuple[pd.DataFrame, dict[str, str | int]]:
@@ -117,8 +134,9 @@ def read_input_csv(name: str, path: Path) -> tuple[pd.DataFrame, dict[str, str |
     if head.startswith(b"<## NASCA DRM FILE - VER1.00 ##>"):
         raise WipBuildError(f"{name} 파일이 NASCA DRM 파일입니다. CSV로 다시 저장된 일반 텍스트 파일이 아닙니다.")
 
-    first_sep = _detect_sep(path)
-    df, encoding, sep = _read_csv_with_fallback(path, first_sep)
+    encoding_order = _build_encoding_order(head)
+    first_sep = _detect_sep(path, encoding_order)
+    df, encoding, sep = _read_csv_with_fallback(path, first_sep, encoding_order)
     df = _normalize_columns(df)
     _assert_required_columns(df, name)
 
@@ -130,7 +148,8 @@ def read_input_csv(name: str, path: Path) -> tuple[pd.DataFrame, dict[str, str |
         "encoding": encoding,
         "separator": repr(sep),
     }
-    print(f"[CSV 로딩 성공] {name}: encoding={encoding}, sep={repr(sep)}, rows={len(df)}, cols={len(df.columns)}")
+    print(f"[CSV 읽기 성공] {name}: encoding={encoding}, sep={repr(sep)}, rows={len(df)}, cols={len(df.columns)}")
+    print(f"[컬럼 확인] {name}: {df.columns.tolist()}")
     return df, meta
 
 
