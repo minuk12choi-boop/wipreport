@@ -233,6 +233,12 @@ def unique_concat_series(s: pd.Series):
     return ", ".join(values) if values else pd.NA
 
 
+
+
+def sorted_unique_concat_series(s: pd.Series):
+    values = sorted({_normalize_text(v) for v in s if _normalize_text(v)})
+    return ", ".join(values) if values else pd.NA
+
 def first_valid_value(s: pd.Series):
     for v in s:
         text = _normalize_text(v)
@@ -873,8 +879,29 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         base["eqpgroup_cham"] = work.groupby(group_keys, dropna=False)["tip_eqpcham"].agg(unique_concat_series).values
     else:
         base["eqpgroup_cham"] = pd.NA
-    if "tip_eqpline" in work.columns:
-        base["eqpline"] = work.groupby(group_keys, dropna=False)["tip_eqpline"].agg(unique_concat_series).values
+    eqp_eqpline_exists = "eqp_eqpline" in work.columns
+    print(f"[eqpline 점검] output_wip eqp_eqpline 존재: {eqp_eqpline_exists}")
+    if not eqp_eqpline_exists:
+        raise RuntimeError("output_wip에 eqp_eqpline 컬럼이 없어 output_wip_concat.eqpline을 생성할 수 없습니다.")
+
+    eqp_eqpline_nonblank = int(work["eqp_eqpline"].map(lambda v: not is_blank(v)).sum())
+    print(f"[eqpline 점검] output_wip eqp_eqpline non-blank rows: {eqp_eqpline_nonblank}")
+
+    eqpline_by_group = (
+        work.groupby(group_keys, dropna=False)["eqp_eqpline"]
+        .apply(sorted_unique_concat_series)
+        .reset_index(name="eqpline")
+    )
+
+    base = base.drop(columns=["eqpline"], errors="ignore")
+    base = base.merge(eqpline_by_group, on=group_keys, how="left", validate="one_to_one")
+
+    eqpline_nonblank = int(base["eqpline"].map(lambda v: not is_blank(v)).sum())
+    eqpline_blank = int(base["eqpline"].map(is_blank).sum())
+    print(f"[eqpline 점검] output_wip_concat eqpline non-blank rows: {eqpline_nonblank}")
+    print(f"[eqpline 점검] output_wip_concat eqpline blank rows: {eqpline_blank}")
+    if eqp_eqpline_nonblank > 0 and eqpline_blank > 0:
+        raise RuntimeError("output_wip_concat.eqpline 생성 오류: output_wip.eqp_eqpline 값이 있는데 최종 eqpline에 빈 값이 발생했습니다.")
 
     base["투입경과일_일"] = base.apply(lambda r: _elapsed_days_float(r.get("sysdate"), r.get("start_date")), axis=1)
     base["step도착경과_일"] = base.apply(lambda r: calculate_day_diff(r.get("sysdate"), r.get("step_arrive_date")), axis=1)
