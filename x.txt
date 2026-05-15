@@ -69,3 +69,10 @@ Name: count, dtype: int64
 [축약 점검] eqp 축약 전/후 rows: 1985 -> 1985
 [행수 점검] mcpath + eqp 조인 후 rows: 352
 [중복 점검] mcpath + eqp 조인 후 완전중복 rows: 3
+[축약 점검] exact tip 축약 후 rows: 2192239
+[행수 점검] exact tip 조인 전 rows: 352
+[행수 점검] exact tip 조인 후 rows: 970
+[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이 로 인한 증가인지 점검합니다.
+[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: 6
+오류: exact tip 조인 후 전체 컬럼 기준 완전중복 rows가 6건입니다.
+PS D:\PERSONAL_SPACE\SW\python> 
