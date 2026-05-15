@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -206,19 +207,27 @@ def _elapsed_days_float(sysdate, target_date) -> float | pd.NA:
     return round((sys_dt - tar_dt).total_seconds() / 86400.0, 1)
 
 
-def _elapsed_hours_float(sysdate, target_date) -> float | pd.NA:
-    sys_dt = _to_datetime_value(sysdate)
-    tar_dt = _to_datetime_value(target_date)
-    if pd.isna(sys_dt) or pd.isna(tar_dt):
-        return pd.NA
-    return round((sys_dt - tar_dt).total_seconds() / 3600.0, 1)
+def calculate_day_diff(sysdate, target_date) -> float | pd.NA:
+    return _elapsed_days_float(sysdate, target_date)
 
 
-def format_elapsed_days(sysdate, target_date) -> str | pd.NA:
-    diff = _elapsed_days_float(sysdate, target_date)
+def format_elapsed_days_label(sysdate, target_date) -> str:
+    diff = calculate_day_diff(sysdate, target_date)
     if pd.isna(diff):
-        return pd.NA
+        return "경과일계산불가"
     return f"{diff:.1f}일↑"
+
+
+def get_older_datetime(a, b):
+    a_dt = _to_datetime_value(a)
+    b_dt = _to_datetime_value(b)
+    if pd.isna(a_dt) and pd.isna(b_dt):
+        return pd.NaT
+    if pd.isna(a_dt):
+        return b_dt
+    if pd.isna(b_dt):
+        return a_dt
+    return min(a_dt, b_dt)
 
 
 def make_prevent_item(row: pd.Series):
@@ -226,12 +235,12 @@ def make_prevent_item(row: pd.Series):
     cham_type = _normalize_text(row.get("tip_type_cham")).upper()
     eqp_id = _normalize_text(row.get("eqp_id"))
     tip_eqpcham = _normalize_text(row.get("tip_eqpcham"))
-    elapsed = format_elapsed_days(row.get("sysdate"), row.get("tip_eqpissuetime"))
+    elapsed = format_elapsed_days_label(row.get("sysdate"), row.get("tip_tip_eventtime"))
 
     if body_type == "PREVENT" and eqp_id:
-        return f"{eqp_id}({elapsed})" if not pd.isna(elapsed) else eqp_id
+        return f"{eqp_id}({elapsed})"
     if cham_type == "PREVENT" and tip_eqpcham:
-        return f"{tip_eqpcham}({elapsed})" if not pd.isna(elapsed) else tip_eqpcham
+        return f"{tip_eqpcham}({elapsed})"
     return pd.NA
 
 
@@ -240,20 +249,22 @@ def make_issue_items(row: pd.Series) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {k: [] for k in statuses}
     seen = {k: set() for k in statuses}
 
-    def add_item(status_raw, eqp_name, change_time):
+    issue_ref_time = get_older_datetime(row.get("eqpissuetime"), row.get("eqp_body_status_change_time"))
+
+    def add_item(status_raw, eqp_name):
         status = _normalize_text(status_raw).upper()
         eqp = _normalize_text(eqp_name)
         if status not in statuses or not eqp:
             return
-        elapsed = format_elapsed_days(row.get("sysdate"), change_time)
-        item = f"{eqp}({elapsed})" if not pd.isna(elapsed) else eqp
+        elapsed = format_elapsed_days_label(row.get("sysdate"), issue_ref_time)
+        item = f"{eqp}({elapsed})"
         if item not in seen[status]:
             seen[status].add(item)
             out[status].append(item)
 
-    add_item(row.get("tip_body_eqp_status"), row.get("eqp_id"), row.get("tip_eqpissuetime"))
-    add_item(row.get("body_eqp_status"), row.get("eqp_id"), row.get("eqp_body_status_change_time"))
-    add_item(row.get("tip_cham_eqp_status"), row.get("tip_eqpcham"), row.get("tip_eqpissuetime"))
+    add_item(row.get("tip_body_eqp_status"), row.get("eqp_id"))
+    add_item(row.get("body_eqp_status"), row.get("eqp_id"))
+    add_item(row.get("tip_cham_eqp_status"), row.get("tip_eqpcham"))
     return out
 
 
@@ -740,13 +751,18 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         base["eqpline"] = work.groupby(group_keys, dropna=False)["tip_eqpline"].agg(unique_concat_series).values
 
     base["투입경과일_일"] = base.apply(lambda r: _elapsed_days_float(r.get("sysdate"), r.get("start_date")), axis=1)
-    base["step도착경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("step_arrive_date")), axis=1)
-    base["마지막event경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("last_event_date")), axis=1)
+    base["step도착경과_일"] = base.apply(lambda r: calculate_day_diff(r.get("sysdate"), r.get("step_arrive_date")), axis=1)
+    base["마지막event경과_일"] = base.apply(lambda r: calculate_day_diff(r.get("sysdate"), r.get("last_event_date")), axis=1)
+    print("[concat 경과일] step도착경과_일 / 마지막event경과_일 DAY 단위 계산 완료")
 
     work["_prevent_item"] = work.apply(make_prevent_item, axis=1)
-    prevent_items = work.groupby(group_keys, dropna=False)["_prevent_item"].agg(unique_concat_series)
+    prevent_items = (
+        work.groupby(group_keys, dropna=False)["_prevent_item"]
+        .apply(lambda s: ", ".join(sorted(set([_normalize_text(v) for v in s if _normalize_text(v)]))) if any(_normalize_text(v) for v in s) else pd.NA)
+    )
     base["prevent"] = prevent_items.values
     base["prevent"] = base["prevent"].apply(lambda x: pd.NA if pd.isna(x) else f"PREVENT: {x}")
+    print("[concat 검증] prevent tip_tip_eventtime 기준 경과일 계산 완료")
 
     issue_group = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
     for _, grp in work.groupby(group_keys, dropna=False):
@@ -759,12 +775,15 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
                     if item not in seen[st]:
                         seen[st].add(item)
                         state_map[st].append(item)
+        for st in ["DOWN", "PM", "LOCAL"]:
+            state_map[st] = sorted(set(state_map[st]), key=lambda x: x.split("(", 1)[0])
         parts = [f"{st}: {', '.join(state_map[st])}" for st in ["DOWN", "PM", "LOCAL"] if state_map[st]]
         issue_group["DOWN"].append(parts)
     issue_values = []
     for parts in issue_group["DOWN"]:
         issue_values.append(" / ".join(parts) if parts else pd.NA)
     base["issue_eqp"] = issue_values
+    print("[concat 검증] issue_eqp 기준일 min(eqpissuetime, eqp_body_status_change_time) 계산 완료")
 
     base = apply_wait_blocked_status(base, work, group_keys)
 
@@ -772,11 +791,52 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         "eqp_id", "tip_eqpcham", "tip_chamberid", "body_eqp_status", "eqpgroup_raw", "ppid", "process", "step",
         "tip_prevent", "tip_type_body", "tip_type_cham", "tip_tip_eventtime", "tip_eqpissue", "tip_body_eqp_status",
         "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline", "tip_batch_kind", "tip_chamber",
+        "eqpissuetime", "eqp_group_raw", "eqpgroup_raw", "eqp_body_status_change_time",
     ]
     removed = [c for c in drop_cols if c in base.columns]
     base = base.drop(columns=removed, errors="ignore")
     print(f"[concat 생성] 제거 컬럼: {removed}")
+    print("[concat 컬럼정리] eqpissuetime / eqp_group_raw 제거 완료")
     print(f"[concat 생성] uniqueconcat 처리 컬럼: {apply_unique_cols}")
+
+    desired_order = [
+        "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_id", "status", "status_reason", "grade", "lot_type", "lot_level",
+        "cur_qty", "carr_id", "bay_name", "proc_id", "order_seq", "sample_step_type", "metal_status", "layer_id", "step_level", "연속",
+        "step_seq", "step_desc", "recipe_id", "tkintype", "batch_kind", "eqp_type", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp",
+        "투입경과일_일", "step도착경과_일", "마지막event경과_일", "start_date", "last_tkout_date", "step_arrive_date", "last_event_date", "exclusion_type",
+    ]
+    ordered = [c for c in desired_order if c in base.columns]
+    remains = [c for c in base.columns if c not in ordered]
+    base = base[ordered + remains]
+    if "status_reason" in base.columns and "status" in base.columns:
+        cols = list(base.columns)
+        cols.remove("status_reason")
+        status_idx = cols.index("status")
+        cols.insert(status_idx + 1, "status_reason")
+        base = base[cols]
+        print("[concat 컬럼정리] status_reason 위치 조정 완료")
+
+    banned_cols = ["step도착경과_시", "마지막event경과_시", "마지막EVENT경과_시", "eqpissuetime", "eqp_group_raw", "eqpgroup_raw", "eqp_body_status_change_time", "tip_tip_eventtime"]
+    remained_banned = [c for c in banned_cols if c in base.columns]
+    if remained_banned:
+        raise WipBuildError(f"concat 금지 컬럼이 남아 있습니다: {remained_banned}")
+    if "step도착경과_일" not in base.columns or "마지막event경과_일" not in base.columns:
+        raise WipBuildError("concat 경과일 컬럼 누락: step도착경과_일 또는 마지막event경과_일")
+
+    label_pattern = r"^[^()]+\((\d+\.\d일↑|경과일계산불가)\)$"
+    if "prevent" in base.columns:
+        p = base["prevent"].dropna().astype(str).str.replace("PREVENT: ", "", regex=False).str.split(", ")
+        invalid = p.apply(lambda arr: any(pd.notna(x) and not re.match(label_pattern, x) for x in arr)).any()
+        if invalid:
+            raise WipBuildError("prevent 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+    if "issue_eqp" in base.columns:
+        tokens = base["issue_eqp"].dropna().astype(str).str.replace(r"(DOWN|PM|LOCAL):\s*", "", regex=True).str.replace(" / ", ", ")
+        invalid_issue = tokens.str.split(", ").apply(lambda arr: any(pd.notna(x) and not re.match(label_pattern, x) for x in arr)).any()
+        if invalid_issue:
+            raise WipBuildError("issue_eqp 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+    if "status_reason" in base.columns and "status" in base.columns:
+        if list(base.columns).index("status_reason") != list(base.columns).index("status") + 1:
+            raise WipBuildError("status_reason 위치 오류: status 바로 오른쪽에 있어야 합니다.")
 
     expected_rows = wip[group_keys].drop_duplicates().shape[0]
     if len(base) != expected_rows:
