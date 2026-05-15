@@ -71,6 +71,31 @@ def _assert_required_columns(df: pd.DataFrame, name: str) -> None:
         raise WipBuildError(f"필수 컬럼 누락: {name}에 {', '.join(missing)} 컬럼이 없습니다.")
 
 
+def require_columns(df: pd.DataFrame, columns: list[str], name: str) -> None:
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        raise RuntimeError(f"{name} 필수 컬럼 누락: {missing}")
+
+
+def assert_unique_columns(df: pd.DataFrame, name: str) -> None:
+    dup_cols = df.columns[df.columns.duplicated()].tolist()
+    if dup_cols:
+        raise RuntimeError(f"{name}에 중복 컬럼명이 있습니다: {dup_cols[:20]}")
+
+
+def normalize_join_key(series: pd.Series, *, numeric_normalize: bool = False) -> pd.Series:
+    ser = series.astype("string").fillna("").str.strip()
+    if not numeric_normalize:
+        return ser
+    num = pd.to_numeric(ser, errors="coerce")
+    out = ser.copy()
+    valid_num = num.notna()
+    int_like = valid_num & (num % 1 == 0)
+    out.loc[int_like] = num.loc[int_like].astype("Int64").astype("string")
+    out.loc[valid_num & ~int_like] = num.loc[valid_num & ~int_like].map(lambda v: format(v, "g"))
+    return out
+
+
 def _build_encoding_order(signature: bytes) -> list[str]:
     if signature.startswith(b"\xff\xfe"):
         preferred = ["utf-16", "utf-16-le"]
@@ -499,52 +524,146 @@ def _keynorm_series(series: pd.Series) -> pd.Series:
 
 
 def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd.DataFrame:
+    mcpath_columns = [
+        "sysdate", "cur_line_id", "sys_line_id", "lot_inform", "lot_id", "carr_id", "grade", "lot_type", "lot_level",
+        "cur_qty", "bay_name", "status", "proc_id", "order_seq", "sample_step_type", "metal_status", "de_rank",
+        "delay_step_type", "연속", "layer_id", "step_level", "step_seq", "step_desc", "eqp_type", "eqp_group_raw",
+        "eqp_id", "recipe_id", "tkintype", "tkin_type_detail", "start_date", "last_tkout_date", "step_arrive_date",
+        "last_event_date",
+    ]
+
+    mclot_required = [
+        "sysdate", "cur_line_id", "sys_line_id", "lot_inform", "lot_id", "grade", "carr_id", "lot_type", "lot_level",
+        "cur_qty", "bay_name", "status", "proc_id", "order_seq", "step_seq", "start_date", "last_tkout_date",
+        "step_arrive_date", "last_event_date",
+    ]
+    steppath_required = [
+        "lot_id", "proc_id", "sample_step_type", "metal_status", "de_rank", "delay_step_type", "연속", "layer_id",
+        "step_level", "order_seq", "step_seq", "step_desc", "eqp_type", "eqp_group_raw", "eqp_id", "recipe_id",
+        "tkintype", "tkin_type_detail",
+    ]
+
+    def pick_col(df: pd.DataFrame, candidates: list[str], label: str, required: bool = True):
+        for c in candidates:
+            if c in df.columns:
+                return df[c]
+        if required:
+            raise RuntimeError(f"{label} 컬럼을 찾을 수 없습니다. 후보={candidates}")
+        return pd.Series(pd.NA, index=df.index, dtype="object")
+
+    def validate_mcpath_columns(df: pd.DataFrame, name: str) -> None:
+        assert_unique_columns(df, name)
+        if df.columns.tolist() != mcpath_columns:
+            raise RuntimeError(f"{name} 컬럼 순서/구성이 MCPATH_COLUMNS와 다릅니다.")
+
+    def select_mcpath_columns_from_joined(joined: pd.DataFrame) -> pd.DataFrame:
+        out = pd.DataFrame(index=joined.index)
+        out["sysdate"] = pick_col(joined, ["sysdate"], "sysdate")
+        out["cur_line_id"] = pick_col(joined, ["cur_line_id"], "cur_line_id")
+        out["sys_line_id"] = pick_col(joined, ["sys_line_id"], "sys_line_id")
+        out["lot_inform"] = pick_col(joined, ["lot_inform"], "lot_inform")
+        out["lot_id"] = pick_col(joined, ["lot_id"], "lot_id")
+        out["carr_id"] = pick_col(joined, ["carr_id"], "carr_id")
+        out["grade"] = pick_col(joined, ["grade"], "grade")
+        out["lot_type"] = pick_col(joined, ["lot_type"], "lot_type")
+        out["lot_level"] = pick_col(joined, ["lot_level"], "lot_level")
+        out["cur_qty"] = pick_col(joined, ["cur_qty"], "cur_qty")
+        out["bay_name"] = pick_col(joined, ["bay_name"], "bay_name")
+        out["status"] = pick_col(joined, ["status"], "status")
+        out["proc_id"] = pick_col(joined, ["proc_id_mclot", "proc_id"], "proc_id")
+        out["order_seq"] = pick_col(joined, ["order_seq_path", "order_seq"], "order_seq")
+        out["sample_step_type"] = pick_col(joined, ["sample_step_type"], "sample_step_type")
+        out["metal_status"] = pick_col(joined, ["metal_status"], "metal_status")
+        out["de_rank"] = pick_col(joined, ["de_rank"], "de_rank")
+        out["delay_step_type"] = pick_col(joined, ["delay_step_type"], "delay_step_type")
+        out["연속"] = pick_col(joined, ["연속"], "연속")
+        out["layer_id"] = pick_col(joined, ["layer_id"], "layer_id")
+        out["step_level"] = pick_col(joined, ["step_level"], "step_level")
+        out["step_seq"] = pick_col(joined, ["step_seq_path", "step_seq"], "step_seq")
+        out["step_desc"] = pick_col(joined, ["step_desc"], "step_desc")
+        out["eqp_type"] = pick_col(joined, ["eqp_type"], "eqp_type")
+        out["eqp_group_raw"] = pick_col(joined, ["eqp_group_raw"], "eqp_group_raw")
+        out["eqp_id"] = pick_col(joined, ["eqp_id"], "eqp_id")
+        out["recipe_id"] = pick_col(joined, ["recipe_id"], "recipe_id")
+        out["tkintype"] = pick_col(joined, ["tkintype"], "tkintype")
+        out["tkin_type_detail"] = pick_col(joined, ["tkin_type_detail"], "tkin_type_detail")
+        out["start_date"] = pick_col(joined, ["start_date"], "start_date")
+        out["last_tkout_date"] = pick_col(joined, ["last_tkout_date"], "last_tkout_date")
+        out["step_arrive_date"] = pick_col(joined, ["step_arrive_date"], "step_arrive_date")
+        out["last_event_date"] = pick_col(joined, ["last_event_date"], "last_event_date")
+        out = out[mcpath_columns]
+        validate_mcpath_columns(out, "현재 step mcpath")
+        return out
+
     print(f"[mcpath 생성] mclot rows: {len(mclot)}")
     print(f"[mcpath 생성] steppath rows: {len(steppath)}")
-    _assert_required_columns(mclot, "mclot")
-    _assert_required_columns(steppath, "steppath")
+    require_columns(mclot, mclot_required, "mclot")
+    require_columns(steppath, steppath_required, "steppath")
     m = mclot.copy()
     p = steppath.copy()
-    for c in ["lot_id", "proc_id", "order_seq", "step_seq", "de_rank", "delay_step_type", "status"]:
-        if c in m.columns:
-            m[f"__k_{c}"] = _keynorm_series(m[c])
-        if c in p.columns:
-            p[f"__k_{c}"] = _keynorm_series(p[c])
+    m["_lot_key"] = normalize_join_key(m["lot_id"])
+    p["_lot_key"] = normalize_join_key(p["lot_id"])
+    m["_order_key"] = normalize_join_key(m["order_seq"], numeric_normalize=True)
+    p["_order_key"] = normalize_join_key(p["order_seq"], numeric_normalize=True)
+    m["_de_rank_key"] = normalize_join_key(m.get("de_rank", pd.Series(pd.NA, index=m.index)), numeric_normalize=True)
+    p["_de_rank_key"] = normalize_join_key(p["de_rank"], numeric_normalize=True)
 
-    current = m.merge(p, left_on=["__k_lot_id", "__k_order_seq"], right_on=["__k_lot_id", "__k_order_seq"], how="left", suffixes=("_m", ""))
-    print(f"[mcpath 생성] 현재 step 조인 rows: {len(current)}")
-    mismatch = int((current["__k_step_seq_m"] != current["__k_step_seq"]).sum()) if "__k_step_seq" in current.columns else 0
-    print(f"[mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: {mismatch}")
-
-    expand_mask = (current["__k_delay_step_type"] == "S") & (current["__k_status"] != "RUN")
-    expand_target = current.loc[expand_mask].copy()
-    print(f"[mcpath 생성] 연속공정 확장 대상 rows: {len(expand_target)}")
-    lot_base = m.drop(columns=[c for c in m.columns if c.startswith("__k_")]).copy()
-    lot_base["__k_lot_id"] = _keynorm_series(m["lot_id"])
-    expanded = (
-        expand_target[["__k_lot_id", "__k_de_rank"]]
-        .drop_duplicates()
-        .merge(p, on=["__k_lot_id", "__k_de_rank"], how="left")
-        .merge(lot_base, on="__k_lot_id", how="left", suffixes=("", "_m"))
+    joined = m.merge(
+        p, on=["_lot_key", "_order_key"], how="left", suffixes=("_mclot", "_path")
     )
-    keep_current = current.loc[~expand_mask].copy()
-    base_cols = [c for c in current.columns if not c.startswith("__k_")]
-    if not expanded.empty:
-        expanded = expanded.rename(columns={c: c.replace("_m", "") for c in expanded.columns})
-        expanded = expanded[[c for c in base_cols if c in expanded.columns]]
-        mcpath = pd.concat([keep_current[base_cols], expanded], ignore_index=True, sort=False)
-    else:
-        mcpath = keep_current[base_cols].copy()
-    print(f"[mcpath 생성] 연속공정 확장 후 rows: {len(mcpath)}")
+    print(f"[mcpath 생성] 현재 step 조인 rows: {len(joined)}")
+    step_mismatch = (
+        normalize_join_key(pick_col(joined, ["step_seq_mclot"], "step_seq_mclot", required=False))
+        != normalize_join_key(pick_col(joined, ["step_seq_path", "step_seq"], "step_seq_path", required=False))
+    )
+    proc_mismatch = (
+        normalize_join_key(pick_col(joined, ["proc_id_mclot"], "proc_id_mclot", required=False))
+        != normalize_join_key(pick_col(joined, ["proc_id_path"], "proc_id_path", required=False))
+    )
+    print(f"[mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: {int(step_mismatch.sum())}")
+    print(f"[mcpath 생성] mclot.proc_id와 steppath.proc_id 불일치 rows: {int(proc_mismatch.sum())}")
 
-    need = ["sysdate","cur_line_id","sys_line_id","lot_inform","lot_id","carr_id","grade","lot_type","lot_level","cur_qty","bay_name","status","proc_id","order_seq","sample_step_type","metal_status","de_rank","delay_step_type","연속","layer_id","step_level","step_seq","step_desc","eqp_type","eqp_group_raw","eqp_id","recipe_id","tkintype","tkin_type_detail","start_date","last_tkout_date","step_arrive_date","last_event_date"]
-    for c in need:
-        if c not in mcpath.columns:
-            mcpath[c] = pd.NA
-    mcpath = mcpath[need]
+    current_selected = select_mcpath_columns_from_joined(joined)
+    delay_norm = current_selected["delay_step_type"].astype("string").fillna("").str.strip().str.upper()
+    status_norm = current_selected["status"].astype("string").fillna("").str.strip().str.upper()
+    expand_mask = (delay_norm == "S") & (status_norm != "RUN")
+    expand_current = current_selected.loc[expand_mask].copy()
+    keep_current = current_selected.loc[~expand_mask].copy()
+    print(f"[mcpath 생성] 연속공정 확장 대상 rows: {len(expand_current)}")
+    print(f"[mcpath 생성] keep_current rows: {len(keep_current)}")
+
+    if expand_current.empty:
+        expanded = pd.DataFrame(columns=mcpath_columns)
+    else:
+        expand_base = expand_current.copy()
+        expand_base["_lot_key"] = normalize_join_key(expand_base["lot_id"])
+        expand_base["_de_rank_key"] = normalize_join_key(expand_base["de_rank"], numeric_normalize=True)
+        expand_joined = expand_base.merge(
+            p, on=["_lot_key", "_de_rank_key"], how="left", suffixes=("_cur", "_path")
+        )
+        expanded = pd.DataFrame(index=expand_joined.index)
+        for c in ["sysdate","cur_line_id","sys_line_id","lot_inform","lot_id","carr_id","grade","lot_type","lot_level","cur_qty","bay_name","status","proc_id","start_date","last_tkout_date","step_arrive_date","last_event_date"]:
+            expanded[c] = pick_col(expand_joined, [f"{c}_cur", c], c)
+        for c in ["order_seq","sample_step_type","metal_status","de_rank","delay_step_type","연속","layer_id","step_level","step_seq","step_desc","eqp_type","eqp_group_raw","eqp_id","recipe_id","tkintype","tkin_type_detail"]:
+            expanded[c] = pick_col(expand_joined, [f"{c}_path", c], c)
+        expanded = expanded[mcpath_columns]
+        validate_mcpath_columns(expanded, "연속확장 mcpath")
+    print(f"[mcpath 생성] 연속공정 확장 후 rows: {len(expanded)}")
+
+    validate_mcpath_columns(keep_current, "keep_current")
+    validate_mcpath_columns(expanded, "expanded")
+    print(f"[mcpath 생성] concat 전 keep_current rows: {len(keep_current)}")
+    print(f"[mcpath 생성] concat 전 expanded rows: {len(expanded)}")
+    mcpath = pd.concat([keep_current, expanded], ignore_index=True, sort=False)
+    assert_unique_columns(mcpath, "최종 mcpath")
+    mcpath = mcpath[mcpath_columns]
+    if len(mcpath) == 0:
+        raise RuntimeError("최종 mcpath row 수가 0입니다.")
     print(f"[mcpath 생성] 최종 mcpath rows: {len(mcpath)}")
+    print(f"[mcpath 생성] 최종 mcpath columns 중복 여부: {bool(mcpath.columns.duplicated().any())}")
     print(f"[mcpath 생성] lot_inform 존재 여부: {'lot_inform' in mcpath.columns}")
     print(f"[mcpath 생성] lot_inform non-empty rows: {int(mcpath['lot_inform'].map(lambda v: not is_blank(v)).sum())}")
+    validate_mcpath_columns(mcpath, "build_mcpath_from_raw_raw 결과")
     return mcpath
 
 
