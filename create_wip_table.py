@@ -763,14 +763,53 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
 
 
 def build_exclusion_type(row: pd.Series) -> str | pd.NA:
-    labels: list[str] = []
-    if not is_blank(row.get("예약제외")):
-        labels.append("예약제외")
-    if not is_blank(row.get("hold")):
-        labels.append("HOLD")
-    if not is_blank(row.get("ftp")):
-        labels.append("FTP")
-    return ", ".join(labels) if labels else pd.NA
+    def extract_oldest_datetime(value):
+        if is_blank(value):
+            return pd.NaT
+        text = str(value)
+        parts = [p.strip() for p in text.split(",")] if "," in text else [text.strip()]
+        candidates = []
+        for p in parts:
+            dt = _parse_single_datetime(p)
+            if pd.notna(dt):
+                candidates.append(dt)
+        if not candidates:
+            dt = _parse_single_datetime(text)
+            return dt if pd.notna(dt) else pd.NaT
+        return min(candidates)
+
+    def has_value(v) -> bool:
+        return not is_blank(v)
+
+    def build_line(label: str, flag_val, user_val, reason_val, date_val, sysdate_val) -> str | None:
+        should_create = is_o(flag_val) or has_value(user_val) or has_value(reason_val) or has_value(date_val)
+        if not should_create:
+            return None
+
+        user_text = _normalize_text(user_val)
+        reason_text = _normalize_text(reason_val)
+        oldest_dt = extract_oldest_datetime(date_val)
+        elapsed_text = format_elapsed_days_label(sysdate_val, oldest_dt)
+
+        parts: list[str] = []
+        if user_text:
+            parts.append(user_text)
+        if reason_text:
+            parts.append(reason_text)
+        parts.append(elapsed_text)
+        detail = "/".join(parts).strip()
+        if not detail:
+            return None
+        return f"{label}: {detail}"
+
+    lines: list[str] = []
+    hold_line = build_line("HOLD", row.get("hold"), row.get("hold_user"), row.get("hold_reason"), row.get("hold_date"), row.get("sysdate"))
+    ftp_line = build_line("FTP", row.get("ftp"), row.get("ftp_user"), row.get("ftp_reason"), row.get("ftp_date"), row.get("sysdate"))
+    except_line = build_line("예약제외", row.get("예약제외"), row.get("예약제외_user"), row.get("예약제외_reason"), row.get("예약제외_date"), row.get("sysdate"))
+    for line in [hold_line, ftp_line, except_line]:
+        if line:
+            lines.append(line)
+    return "\n".join(lines) if lines else pd.NA
 
 
 def _series_nonblank_count(df: pd.DataFrame, col: str) -> int:
@@ -937,6 +976,35 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     non_empty_exclusion = int(base["exclusion_type"].map(lambda v: not is_blank(v)).sum())
     print("[concat 컬럼정리] exclusion_type 생성 완료")
     print(f"[concat 컬럼정리] exclusion_type non-empty rows: {non_empty_exclusion} / {len(base)}")
+    hold_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)HOLD:\s*\S", regex=True, na=False).sum())
+    ftp_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)FTP:\s*\S", regex=True, na=False).sum())
+    exc_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)예약제외:\s*\S", regex=True, na=False).sum())
+    elapsed_fail_cnt = int(base["exclusion_type"].astype(str).str.contains("경과일계산불가", regex=False, na=False).sum())
+    print(f"[exclusion_type 진단] HOLD 라인 생성 rows: {hold_line_cnt}")
+    print(f"[exclusion_type 진단] FTP 라인 생성 rows: {ftp_line_cnt}")
+    print(f"[exclusion_type 진단] 예약제외 라인 생성 rows: {exc_line_cnt}")
+    print(f"[exclusion_type 진단] 경과일계산불가 포함 rows: {elapsed_fail_cnt}")
+
+    # exclusion_type 형식 검증(경고 로그)
+    if "exclusion_type" not in base.columns:
+        raise WipBuildError("exclusion_type 컬럼이 없습니다.")
+    ex_ser = base["exclusion_type"].dropna().astype(str).str.strip()
+    simple_only_mask = ex_ser.isin(["HOLD", "FTP", "예약제외"])
+    if simple_only_mask.any():
+        print(f"[exclusion_type 검증 경고] 단순 키워드만 존재 rows: {int(simple_only_mask.sum())}")
+    detail_missing_cnt = 0
+    for txt in ex_ser:
+        for line in [ln.strip() for ln in txt.split("\n") if ln.strip()]:
+            if line.startswith(("HOLD:", "FTP:", "예약제외:")):
+                tail = line.split(":", 1)[1].strip() if ":" in line else ""
+                if not tail:
+                    detail_missing_cnt += 1
+    if detail_missing_cnt > 0:
+        print(f"[exclusion_type 검증 경고] 라벨 뒤 상세누락 line 수: {detail_missing_cnt}")
+    day_token_cnt = int(ex_ser.str.contains("일↑", regex=False).sum())
+    calc_fail_token_cnt = int(ex_ser.str.contains("경과일계산불가", regex=False).sum())
+    print(f"[exclusion_type 검증] 일↑ 포함 rows: {day_token_cnt}")
+    print(f"[exclusion_type 검증] 경과일계산불가 포함 rows: {calc_fail_token_cnt}")
     src_has_exclusion = any(c in base.columns and base[c].map(lambda v: not is_blank(v)).any() for c in ["예약제외", "hold", "ftp"])
     if src_has_exclusion and non_empty_exclusion == 0:
         print("[concat 컬럼정리 경고] 원천 HOLD/FTP/예약제외 데이터가 있으나 exclusion_type이 모두 비어 있습니다.")
