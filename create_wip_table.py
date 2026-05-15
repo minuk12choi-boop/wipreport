@@ -45,6 +45,7 @@ REQUIRED_COLUMNS = {
 
 ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "utf-8"]
 SEP_CANDIDATES = [",", "\t", "|", ";"]
+KEEP_STATUS_REASON = True
 
 
 class WipBuildError(Exception):
@@ -260,6 +261,152 @@ def _unique_join_text(series: pd.Series) -> str | None:
     vals = [str(v).strip() for v in series.dropna() if str(v).strip()]
     uniq = list(dict.fromkeys(vals))
     return " | ".join(uniq) if uniq else None
+
+
+def is_blank(value) -> bool:
+    if pd.isna(value):
+        return True
+    text = str(value).strip()
+    return text == "" or text.lower() in {"nan", "none", "nat"}
+
+
+def normalize_text(value) -> str:
+    if is_blank(value):
+        return ""
+    return str(value).strip().upper()
+
+
+def is_o(value) -> bool:
+    return normalize_text(value) == "O"
+
+
+def is_bad_status(value) -> bool:
+    return normalize_text(value) in {"LOCAL", "PM", "DOWN"}
+
+
+def is_path_blocked(row: pd.Series) -> bool:
+    return (
+        normalize_text(row.get("tip_type_body")) == "PREVENT"
+        or normalize_text(row.get("tip_type_cham")) == "PREVENT"
+        or not is_blank(row.get("tip_eqpissue"))
+        or not is_blank(row.get("eqpissue"))
+        or is_bad_status(row.get("body_eqp_status"))
+        or is_bad_status(row.get("tip_body_eqp_status"))
+        or is_bad_status(row.get("tip_cham_eqp_status"))
+    )
+
+
+def group_all_paths_blocked(group_df: pd.DataFrame) -> bool:
+    if group_df.empty:
+        return False
+    return bool(group_df.apply(is_path_blocked, axis=1).all())
+
+
+def group_has_ftp_or_exception(group_df: pd.DataFrame) -> bool:
+    if group_df.empty:
+        return False
+    return bool(group_df.apply(lambda r: is_o(r.get("ftp")) or is_o(r.get("예약제외")), axis=1).any())
+
+
+def build_blocked_step_flags(wip: pd.DataFrame, group_keys: list[str]) -> pd.DataFrame:
+    required_cols = group_keys + ["status", "연속"]
+    for c in required_cols:
+        if c not in wip.columns:
+            raise WipBuildError(f"status 재판정 실패: 필수 컬럼 누락 - {c}")
+
+    grouped = wip.groupby(group_keys, dropna=False, sort=False)
+    rows: list[dict] = []
+    for key, grp in grouped:
+        key_dict = dict(zip(group_keys, key if isinstance(key, tuple) else (key,), strict=False))
+        status_val = normalize_text(first_valid_value(grp["status"])) if "status" in grp.columns else ""
+        cont_val = normalize_text(first_valid_value(grp["연속"])) if "연속" in grp.columns else ""
+        rows.append({
+            **key_dict,
+            "all_paths_blocked": group_all_paths_blocked(grp),
+            "has_ftp_or_exception": group_has_ftp_or_exception(grp),
+            "is_wait": status_val == "WAIT",
+            "is_continuous_first": cont_val == "연속첫".upper(),
+            "blocked_by_later_continuous_step": False,
+            "_order_num": pd.to_numeric(key_dict.get("order_seq"), errors="coerce"),
+            "_group_pos": len(rows),
+            "_lot_id_norm": normalize_text(key_dict.get("lot_id")),
+        })
+
+    flags = pd.DataFrame(rows)
+    if flags.empty:
+        return flags
+
+    cont_map = (
+        wip.assign(_lot_id_norm=wip["lot_id"].map(normalize_text), _cont_norm=wip["연속"].map(normalize_text))
+        .groupby(group_keys, dropna=False, sort=False)["_cont_norm"]
+        .agg(lambda s: any(v != "" for v in s))
+        .reset_index(name="_is_continuous_step")
+    )
+    flags = flags.merge(cont_map, on=group_keys, how="left")
+    flags["_is_continuous_step"] = flags["_is_continuous_step"].fillna(False)
+
+    for _, lot_df in flags.groupby("_lot_id_norm", sort=False):
+        if lot_df.empty:
+            continue
+        for idx, row in lot_df.iterrows():
+            if not row["is_continuous_first"]:
+                continue
+            current_num = row["_order_num"]
+            if not pd.isna(current_num):
+                later = lot_df[(lot_df["_order_num"] > current_num) & (lot_df["_is_continuous_step"])]
+            else:
+                print("[status 재판정] 연속공정 후속 step 판정 기준 확인 필요")
+                later = lot_df[(lot_df["_group_pos"] > row["_group_pos"]) & (lot_df["_is_continuous_step"])]
+            later = later[later["all_paths_blocked"]]
+            flags.at[idx, "blocked_by_later_continuous_step"] = not later.empty
+
+    return flags.drop(columns=["_order_num", "_group_pos", "_lot_id_norm", "_is_continuous_step"], errors="ignore")
+
+
+def apply_wait_blocked_status(wip_concat: pd.DataFrame, wip: pd.DataFrame, group_keys: list[str]) -> pd.DataFrame:
+    flags = build_blocked_step_flags(wip, group_keys)
+    if flags.empty:
+        return wip_concat
+
+    flags["wait_block_reason"] = pd.NA
+    flags.loc[flags["has_ftp_or_exception"], "wait_block_reason"] = "FTP/예약제외"
+    flags.loc[flags["wait_block_reason"].isna() & flags["all_paths_blocked"], "wait_block_reason"] = "현스텝 모든 path 진행불가"
+    flags.loc[flags["wait_block_reason"].isna() & flags["blocked_by_later_continuous_step"], "wait_block_reason"] = "연속후속 step 진행불가"
+    flags["will_block_wait"] = flags["is_wait"] & flags["wait_block_reason"].notna()
+
+    wait_cnt = int(flags["is_wait"].sum())
+    changed_cnt = int(flags["will_block_wait"].sum())
+    cond1 = int((flags["is_wait"] & flags["has_ftp_or_exception"]).sum())
+    cond2 = int((flags["is_wait"] & ~flags["has_ftp_or_exception"] & flags["all_paths_blocked"]).sum())
+    cond3 = int((flags["is_wait"] & ~flags["has_ftp_or_exception"] & ~flags["all_paths_blocked"] & flags["blocked_by_later_continuous_step"]).sum())
+    print(f"[status 재판정] WAIT 그룹 수: {wait_cnt}")
+    print(f"[status 재판정] WAIT(진행불가) 변경 수: {changed_cnt}")
+    print(f"[status 재판정] 조건1 FTP/예약제외: {cond1}")
+    print(f"[status 재판정] 조건2 현스텝 모든 path 진행불가: {cond2}")
+    print(f"[status 재판정] 조건3 연속후속 step 진행불가: {cond3}")
+
+    out = wip_concat.merge(flags[group_keys + ["will_block_wait", "wait_block_reason", "is_wait"]], on=group_keys, how="left", validate="1:1")
+    original_status = out["status"].copy() if "status" in out.columns else pd.Series([""] * len(out))
+    out["status"] = out["status"].where(~out["will_block_wait"].fillna(False), "WAIT(진행불가)")
+    if KEEP_STATUS_REASON:
+        out["status_reason"] = out["wait_block_reason"]
+    else:
+        out = out.drop(columns=["status_reason"], errors="ignore")
+
+    # 검증
+    non_wait_changed = (out["is_wait"].fillna(False) == False) & (out["status"].astype(str) != original_status.astype(str))
+    if non_wait_changed.any():
+        raise WipBuildError("status 재판정 오류: WAIT이 아닌 그룹의 status가 변경되었습니다.")
+    if not out["status"].astype(str).str.contains("WAIT\\(진행불가\\)", regex=True, na=False).any() and changed_cnt > 0:
+        raise WipBuildError("status 재판정 오류: 변경 대상이 있었으나 결과 status 반영이 없습니다.")
+    if "status" not in out.columns:
+        raise WipBuildError("status 재판정 오류: status 컬럼이 사라졌습니다.")
+    if KEEP_STATUS_REASON and "status_reason" not in out.columns:
+        raise WipBuildError("status 재판정 오류: KEEP_STATUS_REASON=True 인데 status_reason 컬럼이 없습니다.")
+
+    out = out.drop(columns=["will_block_wait", "wait_block_reason", "is_wait"], errors="ignore")
+    print("[status 재판정] 완료")
+    return out
 
 
 def next_available_path(path: Path) -> Path:
@@ -618,6 +765,8 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     for parts in issue_group["DOWN"]:
         issue_values.append(" / ".join(parts) if parts else pd.NA)
     base["issue_eqp"] = issue_values
+
+    base = apply_wait_blocked_status(base, work, group_keys)
 
     drop_cols = [
         "eqp_id", "tip_eqpcham", "tip_chamberid", "body_eqp_status", "eqpgroup_raw", "ppid", "process", "step",
