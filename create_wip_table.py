@@ -548,7 +548,12 @@ def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd
             if c in df.columns:
                 return df[c]
         if required:
-            raise RuntimeError(f"{label} 컬럼을 찾을 수 없습니다. 후보={candidates}")
+            related = [c for c in df.columns if any(k in c.lower() for k in ["lot", "proc", "order", "step"])]
+            raise RuntimeError(
+                f"{label} 컬럼을 찾을 수 없습니다.\n"
+                f"후보={candidates}\n"
+                f"현재 관련 컬럼={related}"
+            )
         return pd.Series(pd.NA, index=df.index, dtype="object")
 
     def validate_mcpath_columns(df: pd.DataFrame, name: str) -> None:
@@ -558,39 +563,39 @@ def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd
 
     def select_mcpath_columns_from_joined(joined: pd.DataFrame) -> pd.DataFrame:
         out = pd.DataFrame(index=joined.index)
-        out["sysdate"] = pick_col(joined, ["sysdate"], "sysdate")
-        out["cur_line_id"] = pick_col(joined, ["cur_line_id"], "cur_line_id")
-        out["sys_line_id"] = pick_col(joined, ["sys_line_id"], "sys_line_id")
-        out["lot_inform"] = pick_col(joined, ["lot_inform"], "lot_inform")
-        out["lot_id"] = pick_col(joined, ["lot_id"], "lot_id")
-        out["carr_id"] = pick_col(joined, ["carr_id"], "carr_id")
-        out["grade"] = pick_col(joined, ["grade"], "grade")
-        out["lot_type"] = pick_col(joined, ["lot_type"], "lot_type")
-        out["lot_level"] = pick_col(joined, ["lot_level"], "lot_level")
-        out["cur_qty"] = pick_col(joined, ["cur_qty"], "cur_qty")
-        out["bay_name"] = pick_col(joined, ["bay_name"], "bay_name")
-        out["status"] = pick_col(joined, ["status"], "status")
-        out["proc_id"] = pick_col(joined, ["proc_id_mclot", "proc_id"], "proc_id")
-        out["order_seq"] = pick_col(joined, ["order_seq_path", "order_seq"], "order_seq")
-        out["sample_step_type"] = pick_col(joined, ["sample_step_type"], "sample_step_type")
-        out["metal_status"] = pick_col(joined, ["metal_status"], "metal_status")
-        out["de_rank"] = pick_col(joined, ["de_rank"], "de_rank")
-        out["delay_step_type"] = pick_col(joined, ["delay_step_type"], "delay_step_type")
-        out["연속"] = pick_col(joined, ["연속"], "연속")
-        out["layer_id"] = pick_col(joined, ["layer_id"], "layer_id")
-        out["step_level"] = pick_col(joined, ["step_level"], "step_level")
-        out["step_seq"] = pick_col(joined, ["step_seq_path", "step_seq"], "step_seq")
-        out["step_desc"] = pick_col(joined, ["step_desc"], "step_desc")
-        out["eqp_type"] = pick_col(joined, ["eqp_type"], "eqp_type")
-        out["eqp_group_raw"] = pick_col(joined, ["eqp_group_raw"], "eqp_group_raw")
-        out["eqp_id"] = pick_col(joined, ["eqp_id"], "eqp_id")
-        out["recipe_id"] = pick_col(joined, ["recipe_id"], "recipe_id")
-        out["tkintype"] = pick_col(joined, ["tkintype"], "tkintype")
-        out["tkin_type_detail"] = pick_col(joined, ["tkin_type_detail"], "tkin_type_detail")
-        out["start_date"] = pick_col(joined, ["start_date"], "start_date")
-        out["last_tkout_date"] = pick_col(joined, ["last_tkout_date"], "last_tkout_date")
-        out["step_arrive_date"] = pick_col(joined, ["step_arrive_date"], "step_arrive_date")
-        out["last_event_date"] = pick_col(joined, ["last_event_date"], "last_event_date")
+        out["sysdate"] = pick_col(joined, ["sysdate_mclot", "sysdate"], "sysdate")
+        out["cur_line_id"] = pick_col(joined, ["cur_line_id_mclot", "cur_line_id"], "cur_line_id")
+        out["sys_line_id"] = pick_col(joined, ["sys_line_id_mclot", "sys_line_id"], "sys_line_id")
+        out["lot_inform"] = pick_col(joined, ["lot_inform_mclot", "lot_inform"], "lot_inform")
+        out["lot_id"] = pick_col(joined, ["lot_id_mclot", "lot_id", "lot_id_path"], "lot_id")
+        out["carr_id"] = pick_col(joined, ["carr_id_mclot", "carr_id"], "carr_id")
+        out["grade"] = pick_col(joined, ["grade_mclot", "grade"], "grade")
+        out["lot_type"] = pick_col(joined, ["lot_type_mclot", "lot_type"], "lot_type")
+        out["lot_level"] = pick_col(joined, ["lot_level_mclot", "lot_level"], "lot_level")
+        out["cur_qty"] = pick_col(joined, ["cur_qty_mclot", "cur_qty"], "cur_qty")
+        out["bay_name"] = pick_col(joined, ["bay_name_mclot", "bay_name"], "bay_name")
+        out["status"] = pick_col(joined, ["status_mclot", "status"], "status")
+        out["proc_id"] = pick_col(joined, ["proc_id_mclot", "proc_id", "proc_id_path"], "proc_id")
+        out["order_seq"] = pick_col(joined, ["order_seq_path", "order_seq", "order_seq_mclot"], "order_seq")
+        out["sample_step_type"] = pick_col(joined, ["sample_step_type_path", "sample_step_type"], "sample_step_type")
+        out["metal_status"] = pick_col(joined, ["metal_status_path", "metal_status"], "metal_status")
+        out["de_rank"] = pick_col(joined, ["de_rank_path", "de_rank"], "de_rank")
+        out["delay_step_type"] = pick_col(joined, ["delay_step_type_path", "delay_step_type"], "delay_step_type")
+        out["연속"] = pick_col(joined, ["연속_path", "연속"], "연속")
+        out["layer_id"] = pick_col(joined, ["layer_id_path", "layer_id"], "layer_id")
+        out["step_level"] = pick_col(joined, ["step_level_path", "step_level"], "step_level")
+        out["step_seq"] = pick_col(joined, ["step_seq_path", "step_seq", "step_seq_mclot"], "step_seq")
+        out["step_desc"] = pick_col(joined, ["step_desc_path", "step_desc"], "step_desc")
+        out["eqp_type"] = pick_col(joined, ["eqp_type_path", "eqp_type"], "eqp_type")
+        out["eqp_group_raw"] = pick_col(joined, ["eqp_group_raw_path", "eqp_group_raw"], "eqp_group_raw")
+        out["eqp_id"] = pick_col(joined, ["eqp_id_path", "eqp_id"], "eqp_id")
+        out["recipe_id"] = pick_col(joined, ["recipe_id_path", "recipe_id"], "recipe_id")
+        out["tkintype"] = pick_col(joined, ["tkintype_path", "tkintype"], "tkintype")
+        out["tkin_type_detail"] = pick_col(joined, ["tkin_type_detail_path", "tkin_type_detail"], "tkin_type_detail")
+        out["start_date"] = pick_col(joined, ["start_date_mclot", "start_date"], "start_date")
+        out["last_tkout_date"] = pick_col(joined, ["last_tkout_date_mclot", "last_tkout_date"], "last_tkout_date")
+        out["step_arrive_date"] = pick_col(joined, ["step_arrive_date_mclot", "step_arrive_date"], "step_arrive_date")
+        out["last_event_date"] = pick_col(joined, ["last_event_date_mclot", "last_event_date"], "last_event_date")
         out = out[mcpath_columns]
         validate_mcpath_columns(out, "현재 step mcpath")
         return out
@@ -612,6 +617,10 @@ def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd
         p, on=["_lot_key", "_order_key"], how="left", suffixes=("_mclot", "_path")
     )
     print(f"[mcpath 생성] 현재 step 조인 rows: {len(joined)}")
+    joined_related_cols = [c for c in joined.columns if any(k in c.lower() for k in ["lot", "proc", "order", "step"])]
+    print(f"[mcpath 생성] 현재 step joined columns 수: {len(joined.columns)}")
+    print(f"[mcpath 생성] 현재 step joined columns 예시: {joined.columns.tolist()[:50]}")
+    print(f"[mcpath 생성] 현재 step joined lot/proc/order/step 관련 columns: {joined_related_cols}")
     step_mismatch = (
         normalize_join_key(pick_col(joined, ["step_seq_mclot"], "step_seq_mclot", required=False))
         != normalize_join_key(pick_col(joined, ["step_seq_path", "step_seq"], "step_seq_path", required=False))
@@ -641,11 +650,14 @@ def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd
         expand_joined = expand_base.merge(
             p, on=["_lot_key", "_de_rank_key"], how="left", suffixes=("_cur", "_path")
         )
+        expand_related_cols = [c for c in expand_joined.columns if any(k in c.lower() for k in ["lot", "proc", "order", "step"])]
+        print(f"[mcpath 생성] expanded joined columns 수: {len(expand_joined.columns)}")
+        print(f"[mcpath 생성] expanded joined lot/proc/order/step 관련 columns: {expand_related_cols}")
         expanded = pd.DataFrame(index=expand_joined.index)
         for c in ["sysdate","cur_line_id","sys_line_id","lot_inform","lot_id","carr_id","grade","lot_type","lot_level","cur_qty","bay_name","status","proc_id","start_date","last_tkout_date","step_arrive_date","last_event_date"]:
-            expanded[c] = pick_col(expand_joined, [f"{c}_cur", c], c)
+            expanded[c] = pick_col(expand_joined, [f"{c}_cur", f"{c}_mclot", c, f"{c}_path"], c)
         for c in ["order_seq","sample_step_type","metal_status","de_rank","delay_step_type","연속","layer_id","step_level","step_seq","step_desc","eqp_type","eqp_group_raw","eqp_id","recipe_id","tkintype","tkin_type_detail"]:
-            expanded[c] = pick_col(expand_joined, [f"{c}_path", c], c)
+            expanded[c] = pick_col(expand_joined, [f"{c}_path", f"{c}_steppath", c, f"{c}_cur"], c)
         expanded = expanded[mcpath_columns]
         validate_mcpath_columns(expanded, "연속확장 mcpath")
     print(f"[mcpath 생성] 연속공정 확장 후 rows: {len(expanded)}")
