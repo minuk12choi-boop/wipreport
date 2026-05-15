@@ -158,6 +158,104 @@ def safe_to_datetime(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce")
 
 
+def _normalize_text(value) -> str:
+    if pd.isna(value):
+        return ""
+    if isinstance(value, pd.Timestamp):
+        if value.hour == 0 and value.minute == 0 and value.second == 0 and value.microsecond == 0:
+            return value.strftime("%Y-%m-%d")
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text.lower() in {"nan", "none", "nat"}:
+        return ""
+    return text
+
+
+def unique_concat_series(s: pd.Series):
+    seen: set[str] = set()
+    values: list[str] = []
+    for v in s:
+        text = _normalize_text(v)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        values.append(text)
+    return ", ".join(values) if values else pd.NA
+
+
+def first_valid_value(s: pd.Series):
+    for v in s:
+        text = _normalize_text(v)
+        if text:
+            return v
+    return pd.NA
+
+
+def _to_datetime_value(value) -> pd.Timestamp | pd.NaT:
+    return pd.to_datetime(value, errors="coerce")
+
+
+def _elapsed_days_float(sysdate, target_date) -> float | pd.NA:
+    sys_dt = _to_datetime_value(sysdate)
+    tar_dt = _to_datetime_value(target_date)
+    if pd.isna(sys_dt) or pd.isna(tar_dt):
+        return pd.NA
+    return round((sys_dt - tar_dt).total_seconds() / 86400.0, 1)
+
+
+def _elapsed_hours_float(sysdate, target_date) -> float | pd.NA:
+    sys_dt = _to_datetime_value(sysdate)
+    tar_dt = _to_datetime_value(target_date)
+    if pd.isna(sys_dt) or pd.isna(tar_dt):
+        return pd.NA
+    return round((sys_dt - tar_dt).total_seconds() / 3600.0, 1)
+
+
+def format_elapsed_days(sysdate, target_date) -> str | pd.NA:
+    diff = _elapsed_days_float(sysdate, target_date)
+    if pd.isna(diff):
+        return pd.NA
+    return f"{diff:.1f}일↑"
+
+
+def make_prevent_item(row: pd.Series):
+    body_type = _normalize_text(row.get("tip_type_body")).upper()
+    cham_type = _normalize_text(row.get("tip_type_cham")).upper()
+    eqp_id = _normalize_text(row.get("eqp_id"))
+    tip_eqpcham = _normalize_text(row.get("tip_eqpcham"))
+    elapsed = format_elapsed_days(row.get("sysdate"), row.get("tip_eqpissuetime"))
+
+    if body_type == "PREVENT" and eqp_id:
+        return f"{eqp_id}({elapsed})" if not pd.isna(elapsed) else eqp_id
+    if cham_type == "PREVENT" and tip_eqpcham:
+        return f"{tip_eqpcham}({elapsed})" if not pd.isna(elapsed) else tip_eqpcham
+    return pd.NA
+
+
+def make_issue_items(row: pd.Series) -> dict[str, list[str]]:
+    statuses = ["DOWN", "PM", "LOCAL"]
+    out: dict[str, list[str]] = {k: [] for k in statuses}
+    seen = {k: set() for k in statuses}
+
+    def add_item(status_raw, eqp_name, change_time):
+        status = _normalize_text(status_raw).upper()
+        eqp = _normalize_text(eqp_name)
+        if status not in statuses or not eqp:
+            return
+        elapsed = format_elapsed_days(row.get("sysdate"), change_time)
+        item = f"{eqp}({elapsed})" if not pd.isna(elapsed) else eqp
+        if item not in seen[status]:
+            seen[status].add(item)
+            out[status].append(item)
+
+    add_item(row.get("tip_body_eqp_status"), row.get("eqp_id"), row.get("tip_eqpissuetime"))
+    add_item(row.get("body_eqp_status"), row.get("eqp_id"), row.get("eqp_body_status_change_time"))
+    add_item(row.get("tip_cham_eqp_status"), row.get("tip_eqpcham"), row.get("tip_eqpissuetime"))
+    return out
+
+
 def _unique_join_text(series: pd.Series) -> str | None:
     vals = [str(v).strip() for v in series.dropna() if str(v).strip()]
     uniq = list(dict.fromkeys(vals))
@@ -458,6 +556,96 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     return meth
 
 
+def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
+    group_keys = ["lot_id", "step_seq", "order_seq"]
+    missing_keys = [k for k in group_keys if k not in wip.columns]
+    if missing_keys:
+        raise WipBuildError(f"concat 생성 실패: 그룹 기준 컬럼이 없습니다. 누락={missing_keys}")
+
+    print("[concat 생성] 기준 그룹: lot_id, step_seq, order_seq")
+    print(f"[concat 생성] input rows: {len(wip)}")
+    work = wip.copy()
+
+    uniqueconcat_cols = [
+        "예약제외", "예약제외_user", "예약제외_reason", "예약제외_date",
+        "hold", "hold_user", "hold_reason", "hold_date",
+        "ftp", "ftp_user", "ftp_reason", "ftp_date",
+    ]
+    missing_unique_cols = [c for c in uniqueconcat_cols if c not in work.columns]
+    if missing_unique_cols:
+        print(f"[concat 생성] uniqueconcat 누락 컬럼: {missing_unique_cols}")
+    apply_unique_cols = [c for c in uniqueconcat_cols if c in work.columns]
+
+    agg_map = {c: first_valid_value for c in work.columns if c not in group_keys}
+    for c in apply_unique_cols:
+        agg_map[c] = unique_concat_series
+    base = work.groupby(group_keys, dropna=False, as_index=False).agg(agg_map)
+
+    if "eqp_id" in work.columns:
+        base["eqpgroup"] = work.groupby(group_keys, dropna=False)["eqp_id"].agg(unique_concat_series).values
+    else:
+        base["eqpgroup"] = pd.NA
+    if "tip_eqpcham" in work.columns:
+        base["eqpgroup_cham"] = work.groupby(group_keys, dropna=False)["tip_eqpcham"].agg(unique_concat_series).values
+    else:
+        base["eqpgroup_cham"] = pd.NA
+    if "tip_eqpline" in work.columns:
+        base["eqpline"] = work.groupby(group_keys, dropna=False)["tip_eqpline"].agg(unique_concat_series).values
+
+    base["투입경과일_일"] = base.apply(lambda r: _elapsed_days_float(r.get("sysdate"), r.get("start_date")), axis=1)
+    base["step도착경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("step_arrive_date")), axis=1)
+    base["마지막event경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("last_event_date")), axis=1)
+
+    work["_prevent_item"] = work.apply(make_prevent_item, axis=1)
+    prevent_items = work.groupby(group_keys, dropna=False)["_prevent_item"].agg(unique_concat_series)
+    base["prevent"] = prevent_items.values
+    base["prevent"] = base["prevent"].apply(lambda x: pd.NA if pd.isna(x) else f"PREVENT: {x}")
+
+    issue_group = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
+    for _, grp in work.groupby(group_keys, dropna=False):
+        state_map = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
+        seen = {k: set() for k in ["DOWN", "PM", "LOCAL"]}
+        for _, row in grp.iterrows():
+            items = make_issue_items(row)
+            for st in ["DOWN", "PM", "LOCAL"]:
+                for item in items[st]:
+                    if item not in seen[st]:
+                        seen[st].add(item)
+                        state_map[st].append(item)
+        parts = [f"{st}: {', '.join(state_map[st])}" for st in ["DOWN", "PM", "LOCAL"] if state_map[st]]
+        issue_group["DOWN"].append(parts)
+    issue_values = []
+    for parts in issue_group["DOWN"]:
+        issue_values.append(" / ".join(parts) if parts else pd.NA)
+    base["issue_eqp"] = issue_values
+
+    drop_cols = [
+        "eqp_id", "tip_eqpcham", "tip_chamberid", "body_eqp_status", "eqpgroup_raw", "ppid", "process", "step",
+        "tip_prevent", "tip_type_body", "tip_type_cham", "tip_tip_eventtime", "tip_eqpissue", "tip_body_eqp_status",
+        "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline", "tip_batch_kind", "tip_chamber",
+    ]
+    removed = [c for c in drop_cols if c in base.columns]
+    base = base.drop(columns=removed, errors="ignore")
+    print(f"[concat 생성] 제거 컬럼: {removed}")
+    print(f"[concat 생성] uniqueconcat 처리 컬럼: {apply_unique_cols}")
+
+    expected_rows = wip[group_keys].drop_duplicates().shape[0]
+    if len(base) != expected_rows:
+        raise WipBuildError(f"concat row 수 불일치: output={len(base)}, expected={expected_rows}")
+    if "prevent" in base.columns and base["prevent"].astype(str).str.strip().eq("PREVENT:").any():
+        raise WipBuildError("prevent 컬럼에 'PREVENT:'만 존재하는 값이 있습니다.")
+    if "issue_eqp" in base.columns:
+        bad_issue = base["issue_eqp"].astype(str).str.contains(r"^(DOWN:|PM:|LOCAL:)\s*$", regex=True, na=False)
+        if bad_issue.any():
+            raise WipBuildError("issue_eqp 컬럼에 빈 라벨만 존재하는 값이 있습니다.")
+    remained = [c for c in drop_cols if c in base.columns]
+    if remained:
+        raise WipBuildError(f"concat 제거 대상 컬럼이 남아 있습니다: {remained}")
+
+    print(f"[concat 생성] output rows: {len(base)}")
+    return base
+
+
 def main() -> None:
     script_dir = Path(__file__).resolve().parent
     paths = {
@@ -487,6 +675,13 @@ def main() -> None:
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         wip.to_excel(writer, index=False)
+    print(f"[wip 저장 완료] 경로: {output_path}")
+
+    wip_concat = build_wip_concat(wip)
+    output_concat_path = next_available_path(script_dir / "output_wip_concat.xlsx")
+    with pd.ExcelWriter(output_concat_path, engine="openpyxl") as writer:
+        wip_concat.to_excel(writer, index=False)
+    print(f"[concat 저장 완료] 경로: {output_concat_path}")
 
     print("[입력 파일 요약]")
     for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("mcpath", mcpath_meta), ("tip", tip_meta)]:
@@ -494,7 +689,8 @@ def main() -> None:
         print(f"  size={meta['size']} bytes, rows={meta['rows']}, cols={meta['cols']}, encoding={meta['encoding']}, sep={meta['separator']}")
 
     print(f"[wip] row={len(wip)}, col={len(wip.columns)}")
-    print(f"저장 완료: {output_path}")
+    print(f"[결과 요약] output_wip rows: {len(wip)}")
+    print(f"[결과 요약] output_wip_concat rows: {len(wip_concat)}")
 
 
 if __name__ == "__main__":
