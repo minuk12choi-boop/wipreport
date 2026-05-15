@@ -1,3 +1,4 @@
+<현재의 에러 로그>
 PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
 [입력 확인] mclot: C:\Users\minuk12.choi\Documents\zhbm_mclot.csv / size=32656 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
 [CSV 읽기 성공] mclot: encoding=utf-16, sep=',', rows=77, cols=19
