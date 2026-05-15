@@ -48,6 +48,16 @@ ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "u
 SEP_CANDIDATES = [",", "\t", "|", ";"]
 KEEP_STATUS_REASON = True
 
+FINAL_CONCAT_COLUMNS = [
+    "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_id", "status", "status_reason", "grade",
+    "lot_type", "lot_level", "cur_qty", "carr_id", "bay_name", "proc_id", "order_seq", "sample_step_type",
+    "metal_status", "layer_id", "step_level", "연속", "step_seq", "step_desc", "recipe_id", "tkintype",
+    "batch_kind", "eqp_type", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp", "투입경과일_일",
+    "step도착경과_일", "마지막event경과_일", "start_date", "last_tkout_date", "step_arrive_date", "last_event_date",
+    "exclusion_type",
+]
+FINAL_REQUIRED_CONCAT_COLUMNS = ["lot_id", "step_seq", "order_seq", "status", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp", "exclusion_type"]
+
 
 class WipBuildError(Exception):
     pass
@@ -764,6 +774,63 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     base["prevent"] = base["prevent"].apply(lambda x: pd.NA if pd.isna(x) else f"PREVENT: {x}")
     print("[concat 검증] prevent tip_tip_eventtime 기준 경과일 계산 완료")
 
+    issue_candidate_cols = ["eqpissuetime", "tip_eqpissuetime", "tip_tip_eventtime", "eqp_body_status_change_time", "body_status_change_time", "body_status_change_time_eqp"]
+    print("[issue_eqp 진단] 시간 후보 컬럼 존재 여부:")
+    for c in issue_candidate_cols:
+        print(f"- {c}: {c in work.columns}")
+
+    issue_target_mask = (
+        work.get("tip_eqpissue").map(lambda v: not is_blank(v)) if "tip_eqpissue" in work.columns else pd.Series(False, index=work.index)
+    ) | (
+        work.get("eqpissue").map(lambda v: not is_blank(v)) if "eqpissue" in work.columns else pd.Series(False, index=work.index)
+    ) | (
+        work.get("body_eqp_status").map(is_bad_status) if "body_eqp_status" in work.columns else pd.Series(False, index=work.index)
+    ) | (
+        work.get("tip_body_eqp_status").map(is_bad_status) if "tip_body_eqp_status" in work.columns else pd.Series(False, index=work.index)
+    ) | (
+        work.get("tip_cham_eqp_status").map(is_bad_status) if "tip_cham_eqp_status" in work.columns else pd.Series(False, index=work.index)
+    )
+    issue_target = work.loc[issue_target_mask].copy()
+    total_issue_target = len(issue_target)
+    print(f"[issue_eqp 진단] 대상 row 수: {total_issue_target}")
+
+    issue_target["_sysdate_dt"] = safe_to_datetime(issue_target.get("sysdate")) if total_issue_target else pd.Series(dtype="datetime64[ns]")
+    sys_ok = int(issue_target["_sysdate_dt"].notna().sum()) if total_issue_target else 0
+    print(f"[issue_eqp 진단] sysdate 파싱 성공: {sys_ok} / {total_issue_target}")
+
+    eqpissue_col = "eqpissuetime" if "eqpissuetime" in work.columns else ("tip_eqpissuetime" if "tip_eqpissuetime" in work.columns else None)
+    body_col = "eqp_body_status_change_time" if "eqp_body_status_change_time" in work.columns else ("body_status_change_time" if "body_status_change_time" in work.columns else ("body_status_change_time_eqp" if "body_status_change_time_eqp" in work.columns else None))
+    print(f"[issue_eqp 진단] eqpissuetime 컬럼 존재: {eqpissue_col is not None}")
+    print(f"[issue_eqp 진단] eqp_body_status_change_time 컬럼 존재: {body_col is not None}")
+
+    issue_target["_issue_a"] = safe_to_datetime(issue_target[eqpissue_col]) if (total_issue_target and eqpissue_col) else pd.NaT
+    issue_target["_issue_b"] = safe_to_datetime(issue_target[body_col]) if (total_issue_target and body_col) else pd.NaT
+    a_ok = int(issue_target["_issue_a"].notna().sum()) if total_issue_target else 0
+    b_ok = int(issue_target["_issue_b"].notna().sum()) if total_issue_target else 0
+    print(f"[issue_eqp 진단] eqpissuetime 파싱 성공: {a_ok} / {total_issue_target}")
+    print(f"[issue_eqp 진단] eqp_body_status_change_time 파싱 성공: {b_ok} / {total_issue_target}")
+
+    if total_issue_target:
+        issue_target["_issue_ref"] = issue_target[["_issue_a", "_issue_b"]].min(axis=1)
+        both_fail = int((issue_target["_issue_a"].isna() & issue_target["_issue_b"].isna()).sum())
+        ref_ok = int(issue_target["_issue_ref"].notna().sum())
+        issue_fail = int((issue_target["_sysdate_dt"].isna() | issue_target["_issue_ref"].isna()).sum())
+    else:
+        both_fail = ref_ok = issue_fail = 0
+    print(f"[issue_eqp 진단] 두 날짜 모두 파싱 실패: {both_fail} / {total_issue_target}")
+    print(f"[issue_eqp 진단] 기준일 계산 성공: {ref_ok} / {total_issue_target}")
+    print(f"[issue_eqp 진단] 경과일계산불가 item 수: {issue_fail}")
+
+    if eqpissue_col and eqpissue_col != "eqpissuetime":
+        print(f"[issue_eqp 진단] fallback 적용: eqpissuetime 대신 {eqpissue_col} 사용")
+    if body_col and body_col != "eqp_body_status_change_time":
+        print(f"[issue_eqp 진단] fallback 적용: eqp_body_status_change_time 대신 {body_col} 사용")
+
+    if eqpissue_col:
+        work["eqpissuetime"] = work[eqpissue_col]
+    if body_col:
+        work["eqp_body_status_change_time"] = work[body_col]
+
     issue_group = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
     for _, grp in work.groupby(group_keys, dropna=False):
         state_map = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
@@ -799,15 +866,7 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     print("[concat 컬럼정리] eqpissuetime / eqp_group_raw 제거 완료")
     print(f"[concat 생성] uniqueconcat 처리 컬럼: {apply_unique_cols}")
 
-    desired_order = [
-        "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_id", "status", "status_reason", "grade", "lot_type", "lot_level",
-        "cur_qty", "carr_id", "bay_name", "proc_id", "order_seq", "sample_step_type", "metal_status", "layer_id", "step_level", "연속",
-        "step_seq", "step_desc", "recipe_id", "tkintype", "batch_kind", "eqp_type", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp",
-        "투입경과일_일", "step도착경과_일", "마지막event경과_일", "start_date", "last_tkout_date", "step_arrive_date", "last_event_date", "exclusion_type",
-    ]
-    ordered = [c for c in desired_order if c in base.columns]
-    remains = [c for c in base.columns if c not in ordered]
-    base = base[ordered + remains]
+    base = enforce_final_concat_columns(base)
     if "status_reason" in base.columns and "status" in base.columns:
         cols = list(base.columns)
         cols.remove("status_reason")
@@ -854,6 +913,41 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     print(f"[concat 생성] output rows: {len(base)}")
     return base
 
+
+
+def enforce_final_concat_columns(df: pd.DataFrame) -> pd.DataFrame:
+    before_cols = list(df.columns)
+    print(f"[concat 최종컬럼] allowlist 적용 전 columns={len(before_cols)}")
+
+    missing_required = [c for c in FINAL_REQUIRED_CONCAT_COLUMNS if c not in df.columns]
+    if missing_required:
+        raise RuntimeError(f"concat 최종컬럼 필수 컬럼이 누락되었습니다: {missing_required}")
+
+    allowed_existing = [c for c in FINAL_CONCAT_COLUMNS if c in df.columns]
+    dropped_cols = [c for c in before_cols if c not in FINAL_CONCAT_COLUMNS]
+    out = df[allowed_existing].copy()
+
+    print(f"[concat 최종컬럼] allowlist 적용 후 columns={len(out.columns)}")
+    print(f"[concat 최종컬럼] 제거된 컬럼 수={len(dropped_cols)}")
+    if dropped_cols:
+        print(f"[concat 최종컬럼] 제거된 컬럼 예시={dropped_cols[:30]}")
+
+    remained_outside = [c for c in out.columns if c not in FINAL_CONCAT_COLUMNS]
+    if remained_outside:
+        raise RuntimeError(f"concat 최종컬럼 검증 실패: allowlist 외 컬럼이 남아 있습니다: {remained_outside}")
+
+    forbidden_exclusion_parts = [
+        "예약제외", "예약제외_user", "예약제외_reason", "예약제외_date",
+        "hold", "hold_user", "hold_reason", "hold_date",
+        "ftp", "ftp_user", "ftp_reason", "ftp_date",
+        "eqp_eqpline", "eqline",
+    ]
+    still_forbidden = [c for c in forbidden_exclusion_parts if c in out.columns]
+    if still_forbidden:
+        raise RuntimeError(f"concat 최종컬럼 검증 실패: 제거되어야 할 컬럼이 남아 있습니다: {still_forbidden}")
+
+    print("[concat 최종컬럼] 최종 컬럼 검증 완료")
+    return out
 
 def main() -> None:
     script_dir = Path(__file__).resolve().parent
