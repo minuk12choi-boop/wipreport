@@ -17,17 +17,62 @@ PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create
 [mcpath 생성] mclot rows: 77
 [mcpath 생성] steppath rows: 40820
 [mcpath 생성] 현재 step 조인 rows: 139
+[mcpath 생성] 현재 step joined columns 수: 41
+[mcpath 생성] 현재 step joined columns 예시: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_inform', 'lot_id_mclot', 'grade', 'carr_id', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id_mclot', 'order_seq_mclot', 'step_seq_mclot', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date', '_lot_key', '_order_key', '_de_rank_key_mclot', 'lot_id_path', 'proc_id_path', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', ' 연속', 'layer_id', 'step_level', 'order_seq_path', 'step_seq_path', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail', '_de_rank_key_path']
+[mcpath 생성] 현재 step joined lot/proc/order/step 관련 columns: ['lot_inform', 'lot_id_mclot', 'lot_type', 'lot_level', 'proc_id_mclot', 'order_seq_mclot', 'step_seq_mclot', 'step_arrive_date', '_lot_key', '_order_key', '_de_rank_key_mclot', 'lot_id_path', 'proc_id_path', 'sample_step_type', 'delay_step_type', 'step_level', 'order_seq_path', 'step_seq_path', 'step_desc']
 [mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: 0
 [mcpath 생성] mclot.proc_id와 steppath.proc_id 불일치 rows: 0
-Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1359, in <module>
-    main()
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1321, in main
-    mcpath = build_mcpath_from_raw_raw(mclot, steppath)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 626, in build_mcpath_from_raw_raw
-    current_selected = select_mcpath_columns_from_joined(joined)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 565, in select_mcpath_columns_from_joined
-    out["lot_id"] = pick_col(joined, ["lot_id"], "lot_id")
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 551, in pick_col
-    raise RuntimeError(f"{label} 컬럼을 찾을 수 없습니다. 후보={candidates}") 
-RuntimeError: lot_id 컬럼을 찾을 수 없습니다. 후보=['lot_id']
+[mcpath 생성] 연속공정 확장 대상 rows: 25
+[mcpath 생성] keep_current rows: 114
+[mcpath 생성] expanded joined columns 수: 54
+[mcpath 생성] expanded joined lot/proc/order/step 관련 columns: ['lot_inform', 'lot_id_cur', 'lot_type', 'lot_level', 'proc_id_cur', 'order_seq_cur', 'sample_step_type_cur', 'delay_step_type_cur', 'step_level_cur', 'step_seq_cur', 'step_desc_cur', 'step_arrive_date', '_lot_key', 'lot_id_path', 'proc_id_path', 'sample_step_type_path', 'delay_step_type_path', 'step_level_path', 'order_seq_path', 'step_seq_path', 'step_desc_path', '_order_key']
+[mcpath 생성] 연속공정 확장 후 rows: 238
+[mcpath 생성] concat 전 keep_current rows: 114
+[mcpath 생성] concat 전 expanded rows: 238
+[mcpath 생성] 최종 mcpath rows: 352
+[mcpath 생성] 최종 mcpath columns 중복 여부: False
+[mcpath 생성] lot_inform 존재 여부: True
+[mcpath 생성] lot_inform non-empty rows: 310
+[행수 점검] mcpath 원본: 352
+[행수 점검] eqp 원본: 1985
+[행수 점검] tip 원본: 2245180
+[행수 점검] hold 원본: 46764
+[키 분포 점검] eqp 조인 키: keys=['eqp_id'], duplicated_rows=0, duplicated_groups=0
+[키 분포 점검] exact tip 조인 키(챔버 포함): keys=['process', 'step', 'eqpid', 'ppid', 'eqpcham', 'chamberid'], duplicated_rows=102, duplicated_groups=15   
+Series([], Name: count, dtype: int64)
+[키 분포 점검] hold 조인 키: keys=['lot_id', 'step_seq'], duplicated_rows=10050, duplicated_groups=4918
+lot_id     step_seq
+    4
+    4
+    3
+    3
+    3
+    3
+    3
+    3
+    3
+    3 
+Name: count, dtype: int64
+[키 분포 점검] hold item_type 포함 키: keys=['lot_id', 'step_seq', 'item_type'], duplicated_rows=1139, duplicated_groups=565
+lot_id     step_seq      item_type
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     3
+     HOLD LOT     2
+Name: count, dtype: int64
+[축약 점검] eqp 축약 전/후 rows: 1985 -> 1985
+[행수 점검] mcpath + eqp 조인 후 rows: 352
+[중복 점검] mcpath + eqp 조인 후 완전중복 rows: 3
+[축약 점검] exact tip 축약 후 rows: 2192239
+[행수 점검] exact tip 조인 전 rows: 352
+[행수 점검] exact tip 조인 후 rows: 970
+[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이 로 인한 증가인지 점검합니다.
+[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: 6
+오류: exact tip 조인 후 전체 컬럼 기준 완전중복 rows가 6건입니다.
+PS D:\PERSONAL_SPACE\SW\python> 
