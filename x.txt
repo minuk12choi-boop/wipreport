@@ -1,127 +1,36 @@
+<현재의 에러 로그>
 PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
-[입력 확인] mcpath: C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv / size=131140 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
-[CSV 읽기 성공] mcpath: encoding=utf-16, sep=',', rows=239, cols=32
-[컬럼 확인] mcpath: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_id', 'carr_id', 'grade', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id', 'order_seq', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', '연속', 'layer_id', 'step_level', 'step_seq', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date']
-[입력 확인] eqp: C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.csv / size=219948 bytes / signature=b'\xff\xfeE\x00Q\x00P\x00_\x00I\x00D\x00,\x00B\x00O\x00D\x00Y\x00_\x00E\x00Q\x00P\x00_\x00S\x00T\x00A\x00T\x00U\x00S\x00,\x00B\x00O\x00D\x00Y\x00_\x00S\x00T\x00A\x00'
-[CSV 읽기 성공] eqp: encoding=utf-16, sep=',', rows=1978, cols=5
-[컬럼 확인] eqp: ['eqp_id', 'body_eqp_status', 'body_status_change_time', 'batch_kind', 'eqpline']
-[입력 확인] tip: C:\Users\minuk12.choi\Documents\zhbm_tip.csv / size=1321280 bytes / signature=b'\xff\xfeP\x00R\x00O\x00C\x00E\x00S\x00S\x00,\x00S\x00T\x00E\x00P\x00,\x00P\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00C\x00H\x00A\x00M\x00'
-[CSV 읽기 성공] tip: encoding=utf-16, sep=',', rows=6902, cols=16
+[입력 확인] mclot: C:\Users\minuk12.choi\Documents\zhbm_mclot.csv / size=32656 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
+[CSV 읽기 성공] mclot: encoding=utf-16, sep=',', rows=77, cols=19
+[컬럼 확인] mclot: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_inform', 'lot_id', 'grade', 'carr_id', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id', 'order_seq', 'step_seq', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date']
+[입력 확인] steppath: C:\Users\minuk12.choi\Documents\zhbm_steppath.csv / size=10456622 bytes / signature=b'\xff\xfeL\x00O\x00T\x00_\x00I\x00D\x00,\x00P\x00R\x00O\x00C\x00_\x00I\x00D\x00,\x00S\x00A\x00M\x00P\x00L\x00E\x00_\x00S\x00T\x00E\x00P\x00_\x00T\x00Y\x00P\x00E\x00'
+[CSV 읽기 성공] steppath: encoding=utf-16, sep=',', rows=40820, cols=18
+[컬럼 확인] steppath: ['lot_id', 'proc_id', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', '연속', 'layer_id', 'step_level', 'order_seq', 'step_seq', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail']
+[입력 확인] eqpmaster: C:\Users\minuk12.choi\Documents\eqpmaster.csv / size=220300 bytes / signature=b'\xff\xfeE\x00Q\x00P\x00_\x00I\x00D\x00,\x00B\x00A\x00T\x00C\x00H\x00_\x00K\x00I\x00N\x00D\x00,\x00E\x00Q\x00P\x00L\x00I\x00N\x00E\x00,\x00B\x00O\x00D\x00Y\x00_\x00'
+[CSV 읽기 성공] eqpmaster: encoding=utf-16, sep=',', rows=1985, cols=5        
+[컬럼 확인] eqpmaster: ['eqp_id', 'batch_kind', 'eqpline', 'body_eqp_status', 'body_status_change_time']
+[입력 확인] tip: C:\Users\minuk12.choi\Documents\tip.csv / size=484931504 bytes / signature=b'\xff\xfeP\x00R\x00O\x00C\x00E\x00S\x00S\x00,\x00S\x00T\x00E\x00P\x00,\x00P\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00C\x00H\x00A\x00M\x00'
+[CSV 읽기 성공] tip: encoding=utf-16, sep=',', rows=2245180, cols=16
 [컬럼 확인] tip: ['process', 'step', 'ppid', 'eqpid', 'eqpcham', 'chamberid', 'batch_kind', 'prevent', 'type_body', 'type_cham', 'tip_eventtime', 'eqpissue', 'body_eqp_status', 'cham_eqp_status', 'eqpissuetime', 'eqpline']
-[입력 확인] hold: C:\Users\minuk12.choi\Documents\zhbm_hold.csv / size=12321118 bytes / signature=b'\xff\xfeI\x00T\x00E\x00M\x00_\x00T\x00Y\x00P\x00E\x00,\x00L\x00O\x00T\x00_\x00I\x00D\x00,\x00S\x00T\x00E\x00P\x00_\x00S\x00E\x00Q\x00,\x00H\x00O\x00L\x00D\x00_\x00'
-[CSV 읽기 성공] hold: encoding=utf-16, sep=',', rows=46516, cols=6
+[입력 확인] hold: C:\Users\minuk12.choi\Documents\hold.csv / size=12606322 bytes / signature=b'\xff\xfeI\x00T\x00E\x00M\x00_\x00T\x00Y\x00P\x00E\x00,\x00L\x00O\x00T\x00_\x00I\x00D\x00,\x00S\x00T\x00E\x00P\x00_\x00S\x00E\x00Q\x00,\x00H\x00O\x00L\x00D\x00_\x00'
+[CSV 읽기 성공] hold: encoding=utf-16, sep=',', rows=46764, cols=6
 [컬럼 확인] hold: ['item_type', 'lot_id', 'step_seq', 'hold_user', 'hold_reason', 'hold_date']
-[행수 점검] mcpath 원본: 239
-[행수 점검] eqp 원본: 1978
-[행수 점검] tip 원본: 6902
-[행수 점검] hold 원본: 46516
-[키 분포 점검] eqp 조인 키: keys=['eqp_id'], duplicated_rows=0, duplicated_groups=0
-[키 분포 점검] exact tip 조인 키(챔버 포함): keys=['process', 'step', 'eqpid', 'ppid', 'eqpcham', 'chamberid'], duplicated_rows=98, duplicated_groups=14    
-Series([], Name: count, dtype: int64)
-[키 분포 점검] hold 조인 키: keys=['lot_id', 'step_seq'], duplicated_rows=9956, duplicated_groups=4871
-lot_id      step_seq
-      4
-      3
-      3
-      3
-      3
-      3
-      3
-      3
-      3
-      3
-Name: count, dtype: int64
-[키 분포 점검] hold item_type 포함 키: keys=['lot_id', 'step_seq', 'item_type'], duplicated_rows=1145, duplicated_groups=568
-lot_id     step_seq      item_type
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     3
-      HOLD LOT     2
-Name: count, dtype: int64
-[축약 점검] eqp 축약 전/후 rows: 1978 -> 1978
-[행수 점검] mcpath + eqp 조인 후 rows: 239
-[중복 점검] mcpath + eqp 조인 후 완전중복 rows: 0
-D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py:170: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
-  return pd.to_datetime(series, errors="coerce")
-[축약 점검] exact tip 축약 후 rows: 6297
-[행수 점검] exact tip 조인 전 rows: 239
-[행수 점검] exact tip 조인 후 rows: 1053
-[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이 로 인한 증가인지 점검합니다.
-[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: 0
-D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py:170: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
-  return pd.to_datetime(series, errors="coerce")
-[행수 점검] wildcard tip 반영 후 rows: 1053
-[중복 점검] wildcard tip 반영 후 전체 컬럼 기준 완전중복 rows: 0
-[hold 집계 점검] hold raw rows: 46516
-[hold 집계 점검] category 적용 rows: 46516
-[hold 집계 점검] grouped lot_id+step_seq+category rows: 45801
-[hold 집계 점검] 최종 hold_summary rows: 41431
-[hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: 0
-[hold flag 점검] source keys: 41431, result keys: 41431
-[hold flag 점검] 원천에 없는 category를 포함한 결과 rows: 0
-[hold merge 점검] met rows: 1053
-[hold merge 점검] met unique lot_id+step_seq: 122
-[키 분포 점검] met lot_id+step_seq 중복 rows: 1015
-[안내] met는 lot_id+step_seq 기준 여러 행이 정상일 수 있습니다. tip_eqpcham/tip_chamberid 등 챔버 정보가 다르면 보존합니다.
-[hold merge 점검] hold_summary rows: 41431
-[hold merge 점검] hold_summary columns: ['lot_id', 'step_seq', '예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
-[hold merge 점검] hold_summary duplicate key rows: 0
-[hold merge 점검] key overlap unique count: 31
-[행수 점검] hold merge 후 rows: 1053
-[중복 점검] hold merge 후 전체 컬럼 기준 완전중복 rows: 0
-[행수 점검] 최종 wip rows: 1053
-[중복 점검] 최종 wip 전체 컬럼 기준 완전중복 rows: 0
-[챔버 보존 점검] 같은 lot_id+step_seq 내 tip_eqpcham/tip_chamberid 다중 조합 group 수: 66
-[챔버 보존 점검] 해당 행들은 중복 제거 대상이 아닙니다.
-[wip 저장 완료] 경로: D:\PERSONAL_SPACE\SW\python\4_zhbm\output_wip (3).xlsx
-[concat 생성] 기준 그룹: lot_id, step_seq, order_seq
-[concat 생성] input rows: 1053
-[concat 경과일] step도착경과_일 / 마지막event경과_일 DAY 단위 계산 완료
-[concat 검증] prevent tip_tip_eventtime 기준 경과일 계산 완료
-[issue_eqp 진단] 시간 후보 컬럼 존재 여부:
-- eqpissuetime: True
-- tip_eqpissuetime: True
-- tip_tip_eventtime: True
-- eqp_body_status_change_time: True
-- body_status_change_time: False
-- body_status_change_time_eqp: False
-[issue_eqp 진단] 대상 row 수: 170
-[issue_eqp 진단] sysdate 파싱 성공: 170 / 170
-[issue_eqp 진단] eqpissuetime 컬럼 존재: True
-[issue_eqp 진단] eqp_body_status_change_time 컬럼 존재: True
-D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py:170: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
-  return pd.to_datetime(series, errors="coerce")
-D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py:170: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
-  return pd.to_datetime(series, errors="coerce")
-[issue_eqp 진단] eqpissuetime 파싱 성공: 0 / 170
-[issue_eqp 진단] eqp_body_status_change_time 파싱 성공: 0 / 170
-[issue_eqp 진단] 두 날짜 모두 파싱 실패: 170 / 170
-[issue_eqp 진단] 기준일 계산 성공: 0 / 170
-[issue_eqp 진단] 경과일계산불가 item 수: 170
-[concat 검증] issue_eqp 기준일 min(eqpissuetime, eqp_body_status_change_time) 계산 완료
-[status 재판정] WAIT 그룹 수: 53
-[status 재판정] WAIT(진행불가) 변경 수: 25
-[status 재판정] 조건1 FTP/예약제외: 0
-[status 재판정] 조건2 현스텝 모든 path 진행불가: 14
-[status 재판정] 조건3 연속후속 step 진행불가: 11
-[status 재판정] 완료
-[concat 생성] 제거 컬럼: ['eqp_id', 'tip_eqpcham', 'tip_chamberid', 'body_eqp_status', 'ppid', 'process', 'step', 'tip_prevent', 'tip_type_body', 'tip_type_cham', 'tip_tip_eventtime', 'tip_eqpissue', 'tip_body_eqp_status', 'tip_cham_eqp_status', 'tip_eqpissuetime', 'tip_eqpline', 'tip_batch_kind', 'eqpissuetime', 'eqp_group_raw', 'eqp_body_status_change_time']
-[concat 컬럼정리] eqpissuetime / eqp_group_raw 제거 완료
-[concat 생성] uniqueconcat 처리 컬럼: ['예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
-[concat 최종컬럼] allowlist 적용 전 columns=57
+[mcpath 생성] mclot rows: 77
+[mcpath 생성] steppath rows: 40820
+[mcpath 생성] 현재 step 조인 rows: 139
+[mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: 0
+[mcpath 생성] 연속공정 확장 대상 rows: 25
 Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1001, in <module>
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1240, in <module>
     main()
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 983, in main
-    wip_concat = build_wip_concat(wip)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 869, in build_wip_concat
-    base = enforce_final_concat_columns(base)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 924, in enforce_final_concat_columns
-    raise RuntimeError(f"concat 최종컬럼 필수 컬럼이 누락되었습니다: {missing_required}")
-RuntimeError: concat 최종컬럼 필수 컬럼이 누락되었습니다: ['exclusion_type'] 
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1202, in main
+    mcpath = build_mcpath_from_raw_raw(mclot, steppath)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 535, in build_mcpath_from_raw_raw
+    mcpath = pd.concat([keep_current[base_cols], expanded], ignore_index=True, sort=False)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\reshape\concat.py", line 395, in concat
+    return op.get_result()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\reshape\concat.py", line 680, in get_result
+    indexers[ax] = obj_labels.get_indexer(new_labels)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3885, in get_indexer
+    raise InvalidIndexError(self._requires_unique_msg)
+pandas.errors.InvalidIndexError: Reindexing only valid with uniquely valued Index objects
