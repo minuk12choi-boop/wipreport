@@ -1,1 +1,2 @@
-↑
+sys_line_id	cur_line_id	eqpline	sysdate	lot_id	status	grade	lot_type	lot_level	cur_qty	carr_id	bay_name	proc_id	order_seq	sample_step_type	metal_status	layer_id	step_level	연속	step_seq	step_desc	recipe_id	tkintype	batch_kind	eqp_type	eqpgroup	eqpgroup_cham	prevent	issue_eqp	투입경과일_일	step도착경과_시	마지막event경과_시	eqpissuetime	start_date	last_tkout_date	step_arrive_date	last_event_date hold
+(*이 때 hold란 hold, 예약제외, ftp merge한 컬럼을 의미함)
