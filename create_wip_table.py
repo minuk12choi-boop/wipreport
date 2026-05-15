@@ -186,6 +186,11 @@ def unique_concat_series(s: pd.Series):
     return ", ".join(values) if values else pd.NA
 
 
+def sorted_unique_concat_series(s: pd.Series):
+    vals = sorted({_normalize_text(v) for v in s if _normalize_text(v)})
+    return ", ".join(vals) if vals else pd.NA
+
+
 def first_valid_value(s: pd.Series):
     for v in s:
         text = _normalize_text(v)
@@ -221,17 +226,83 @@ def format_elapsed_days(sysdate, target_date) -> str | pd.NA:
     return f"{diff:.1f}일↑"
 
 
+def format_elapsed_days_label(sysdate, target_date) -> str:
+    diff = _elapsed_days_float(sysdate, target_date)
+    if pd.isna(diff):
+        return "경과일계산불가"
+    return f"{diff:.1f}일↑"
+
+
+def extract_oldest_datetime(value) -> pd.Timestamp | pd.NaT:
+    text = _normalize_text(value)
+    if not text:
+        return pd.NaT
+    parts = [p.strip() for p in text.replace("\n", ",").split(",") if p.strip()]
+    parsed = pd.to_datetime(parts, errors="coerce")
+    parsed = parsed[~pd.isna(parsed)]
+    if len(parsed) == 0:
+        single = pd.to_datetime(text, errors="coerce")
+        return single if not pd.isna(single) else pd.NaT
+    return parsed.min()
+
+
+def build_exclusion_type(row: pd.Series):
+    sysdate = row.get("sysdate")
+    lines: list[str] = []
+    specs = [
+        ("HOLD", "hold", "hold_user", "hold_reason", "hold_date"),
+        ("FTP", "ftp", "ftp_user", "ftp_reason", "ftp_date"),
+        ("예약제외", "예약제외", "예약제외_user", "예약제외_reason", "예약제외_date"),
+    ]
+    for label, flag_col, user_col, reason_col, date_col in specs:
+        flag = _normalize_text(row.get(flag_col)).upper()
+        user = _normalize_text(row.get(user_col))
+        reason = _normalize_text(row.get(reason_col))
+        oldest_date = extract_oldest_datetime(row.get(date_col))
+        has_date = not pd.isna(oldest_date)
+        if not (flag == "O" or user or reason or has_date):
+            continue
+        parts = []
+        if user:
+            parts.append(user)
+        if reason:
+            parts.append(reason)
+        if has_date or flag == "O" or user or reason:
+            parts.append(format_elapsed_days_label(sysdate, oldest_date))
+        if parts:
+            lines.append(f"{label}: {'/'.join(parts)}")
+    return "\n".join(lines) if lines else pd.NA
+
+
+def apply_concat_column_order(df: pd.DataFrame) -> pd.DataFrame:
+    desired_order = [
+        "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_id", "status", "grade", "lot_type", "lot_level",
+        "cur_qty", "carr_id", "bay_name", "proc_id", "order_seq", "sample_step_type", "metal_status", "layer_id",
+        "step_level", "연속", "step_seq", "step_desc", "recipe_id", "tkintype", "batch_kind", "eqp_type", "eqpgroup",
+        "eqpgroup_cham", "prevent", "issue_eqp", "투입경과일_일", "step도착경과_시", "마지막event경과_시", "eqpissuetime",
+        "start_date", "last_tkout_date", "step_arrive_date", "last_event_date", "exclusion_type",
+    ]
+    front = [c for c in desired_order if c in df.columns]
+    if "exclusion_type" not in front:
+        raise WipBuildError("최종 컬럼 순서 적용 실패: exclusion_type 컬럼이 없습니다.")
+    tail = [c for c in df.columns if c not in front]
+    return df[front + tail]
+
+
 def make_prevent_item(row: pd.Series):
     body_type = _normalize_text(row.get("tip_type_body")).upper()
     cham_type = _normalize_text(row.get("tip_type_cham")).upper()
     eqp_id = _normalize_text(row.get("eqp_id"))
     tip_eqpcham = _normalize_text(row.get("tip_eqpcham"))
-    elapsed = format_elapsed_days(row.get("sysdate"), row.get("tip_eqpissuetime"))
+    issue_time = row.get("tip_eqpissuetime")
+    if pd.isna(_to_datetime_value(issue_time)):
+        issue_time = row.get("eqpissuetime")
+    elapsed = format_elapsed_days_label(row.get("sysdate"), issue_time)
 
     if body_type == "PREVENT" and eqp_id:
-        return f"{eqp_id}({elapsed})" if not pd.isna(elapsed) else eqp_id
+        return f"{eqp_id}({elapsed})"
     if cham_type == "PREVENT" and tip_eqpcham:
-        return f"{tip_eqpcham}({elapsed})" if not pd.isna(elapsed) else tip_eqpcham
+        return f"{tip_eqpcham}({elapsed})"
     return pd.NA
 
 
@@ -245,8 +316,8 @@ def make_issue_items(row: pd.Series) -> dict[str, list[str]]:
         eqp = _normalize_text(eqp_name)
         if status not in statuses or not eqp:
             return
-        elapsed = format_elapsed_days(row.get("sysdate"), change_time)
-        item = f"{eqp}({elapsed})" if not pd.isna(elapsed) else eqp
+        elapsed = format_elapsed_days_label(row.get("sysdate"), change_time)
+        item = f"{eqp}({elapsed})"
         if item not in seen[status]:
             seen[status].add(item)
             out[status].append(item)
@@ -729,22 +800,25 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     base = work.groupby(group_keys, dropna=False, as_index=False).agg(agg_map)
 
     if "eqp_id" in work.columns:
-        base["eqpgroup"] = work.groupby(group_keys, dropna=False)["eqp_id"].agg(unique_concat_series).values
+        base["eqpgroup"] = work.groupby(group_keys, dropna=False)["eqp_id"].agg(sorted_unique_concat_series).values
     else:
         base["eqpgroup"] = pd.NA
     if "tip_eqpcham" in work.columns:
-        base["eqpgroup_cham"] = work.groupby(group_keys, dropna=False)["tip_eqpcham"].agg(unique_concat_series).values
+        base["eqpgroup_cham"] = work.groupby(group_keys, dropna=False)["tip_eqpcham"].agg(sorted_unique_concat_series).values
     else:
         base["eqpgroup_cham"] = pd.NA
-    if "tip_eqpline" in work.columns:
-        base["eqpline"] = work.groupby(group_keys, dropna=False)["tip_eqpline"].agg(unique_concat_series).values
+    if "eqp_eqpline" in base.columns:
+        base = base.drop(columns=["eqpline"], errors="ignore")
+        base = base.rename(columns={"eqp_eqpline": "eqpline"})
+    else:
+        print("[경고] eqp_eqpline 컬럼이 없어 최종 eqpline 컬럼을 생성하지 않습니다.")
 
     base["투입경과일_일"] = base.apply(lambda r: _elapsed_days_float(r.get("sysdate"), r.get("start_date")), axis=1)
     base["step도착경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("step_arrive_date")), axis=1)
     base["마지막event경과_시"] = base.apply(lambda r: _elapsed_hours_float(r.get("sysdate"), r.get("last_event_date")), axis=1)
 
     work["_prevent_item"] = work.apply(make_prevent_item, axis=1)
-    prevent_items = work.groupby(group_keys, dropna=False)["_prevent_item"].agg(unique_concat_series)
+    prevent_items = work.groupby(group_keys, dropna=False)["_prevent_item"].agg(sorted_unique_concat_series)
     base["prevent"] = prevent_items.values
     base["prevent"] = base["prevent"].apply(lambda x: pd.NA if pd.isna(x) else f"PREVENT: {x}")
 
@@ -759,22 +833,32 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
                     if item not in seen[st]:
                         seen[st].add(item)
                         state_map[st].append(item)
+        for st in ["DOWN", "PM", "LOCAL"]:
+            state_map[st] = sorted(set(state_map[st]), key=lambda x: x.split("(")[0])
         parts = [f"{st}: {', '.join(state_map[st])}" for st in ["DOWN", "PM", "LOCAL"] if state_map[st]]
         issue_group["DOWN"].append(parts)
     issue_values = []
     for parts in issue_group["DOWN"]:
         issue_values.append(" / ".join(parts) if parts else pd.NA)
     base["issue_eqp"] = issue_values
+    base["exclusion_type"] = base.apply(build_exclusion_type, axis=1)
+    print("[concat 컬럼정리] exclusion_type 생성 완료")
 
     base = apply_wait_blocked_status(base, work, group_keys)
 
     drop_cols = [
         "eqp_id", "tip_eqpcham", "tip_chamberid", "body_eqp_status", "eqpgroup_raw", "ppid", "process", "step",
         "tip_prevent", "tip_type_body", "tip_type_cham", "tip_tip_eventtime", "tip_eqpissue", "tip_body_eqp_status",
-        "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline", "tip_batch_kind", "tip_chamber",
+        "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline", "tip_batch_kind", "tip_chamber", "eqpid", "de_rank",
+        "delay_step_type", "tkin_type_detail", "eqp_body_eqp_status", "eqp_body_status_change_time", "eqp_batch_kind",
+        "eqpissue", "tip_eventtime", "body_eqp_status", "예약제외", "예약제외_user", "예약제외_date", "예약제외_reason",
+        "hold", "hold_date", "hold_reason", "hold_user", "ftp", "ftp_user", "ftp_reason", "ftp_date", "hold_info",
     ]
     removed = [c for c in drop_cols if c in base.columns]
     base = base.drop(columns=removed, errors="ignore")
+    print("[concat 컬럼정리] 개별 HOLD/FTP/예약제외 컬럼 제거 완료")
+    base = apply_concat_column_order(base)
+    print("[concat 컬럼정리] 최종 컬럼 순서 적용 완료")
     print(f"[concat 생성] 제거 컬럼: {removed}")
     print(f"[concat 생성] uniqueconcat 처리 컬럼: {apply_unique_cols}")
 
@@ -783,10 +867,29 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         raise WipBuildError(f"concat row 수 불일치: output={len(base)}, expected={expected_rows}")
     if "prevent" in base.columns and base["prevent"].astype(str).str.strip().eq("PREVENT:").any():
         raise WipBuildError("prevent 컬럼에 'PREVENT:'만 존재하는 값이 있습니다.")
+    print("[concat 검증] prevent 경과일 표현 점검 완료")
     if "issue_eqp" in base.columns:
         bad_issue = base["issue_eqp"].astype(str).str.contains(r"^(DOWN:|PM:|LOCAL:)\s*$", regex=True, na=False)
         if bad_issue.any():
             raise WipBuildError("issue_eqp 컬럼에 빈 라벨만 존재하는 값이 있습니다.")
+    print("[concat 검증] issue_eqp 경과일 표현 점검 완료")
+    if "exclusion_type" not in base.columns:
+        raise WipBuildError("concat 검증 실패: exclusion_type 컬럼이 없습니다.")
+    print("[concat 검증] exclusion_type 존재 확인 완료")
+    if "hold_info" in base.columns:
+        raise WipBuildError("concat 검증 실패: hold_info 컬럼이 남아 있습니다.")
+    if "eqpissuetime" not in base.columns:
+        raise WipBuildError("concat 검증 실패: eqpissuetime 컬럼이 없습니다.")
+    if "prevent" in base.columns:
+        has_prevent = base["prevent"].astype(str).str.contains("PREVENT:", na=False)
+        bad_elapsed = has_prevent & ~base["prevent"].astype(str).str.contains(r"일↑|경과일계산불가", na=False)
+        if bad_elapsed.any():
+            raise WipBuildError("concat 검증 실패: prevent 경과일 표기가 누락되었습니다.")
+    if "issue_eqp" in base.columns:
+        has_issue = base["issue_eqp"].astype(str).str.contains(r"DOWN:|PM:|LOCAL:", regex=True, na=False)
+        bad_issue_elapsed = has_issue & ~base["issue_eqp"].astype(str).str.contains(r"일↑|경과일계산불가", na=False)
+        if bad_issue_elapsed.any():
+            raise WipBuildError("concat 검증 실패: issue_eqp 경과일 표기가 누락되었습니다.")
     remained = [c for c in drop_cols if c in base.columns]
     if remained:
         raise WipBuildError(f"concat 제거 대상 컬럼이 남아 있습니다: {remained}")
