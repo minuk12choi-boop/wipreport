@@ -8,22 +8,17 @@ import pandas as pd
 
 
 
-EQP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_eqpmaster.csv"
-HOLD_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_hold.csv"
-MCPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclotsteppath.csv"
-TIP_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_tip.csv"
+EQP_PATH = r"C:\Users\minuk12.choi\Documents\eqpmaster.csv"
+HOLD_PATH = r"C:\Users\minuk12.choi\Documents\hold.csv"
+MCLOT_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_mclot.csv"
+STEPPATH_PATH = r"C:\Users\minuk12.choi\Documents\zhbm_steppath.csv"
+TIP_PATH = r"C:\Users\minuk12.choi\Documents\tip.csv"
 
 REQUIRED_COLUMNS = {
-    "mcpath": [
-        "lot_id",
-        "order_seq",
-        "step_seq",
-        "proc_id",
-        "eqp_id",
-        "recipe_id",
-        "status",
-    ],
-    "eqp": ["eqp_id", "batch_kind", "eqpline", "body_eqp_status", "body_status_change_time"],
+    "mclot": ["lot_id","proc_id","order_seq","step_seq","status","lot_inform","sysdate","cur_line_id","sys_line_id"],
+    "steppath": ["lot_id","proc_id","order_seq","step_seq","eqp_id","recipe_id","de_rank","delay_step_type","연속"],
+    "mcpath": ["lot_id","order_seq","step_seq","proc_id","eqp_id","recipe_id","status","lot_inform"],
+    "eqpmaster": ["eqp_id", "batch_kind", "eqpline", "body_eqp_status", "body_status_change_time"],
     "tip": [
         "process",
         "step",
@@ -42,7 +37,7 @@ REQUIRED_COLUMNS = {
         "eqpissuetime",
         "eqpline",
     ],
-    "hold": ["item_type", "lot_id", "step_seq", "hold_user", "hold_reason", "hold_date"],
+    "hold": ["lot_id", "step_seq"],
 }
 
 ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "utf-8"]
@@ -50,14 +45,14 @@ SEP_CANDIDATES = [",", "\t", "|", ";"]
 KEEP_STATUS_REASON = True
 
 FINAL_CONCAT_COLUMNS = [
-    "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_id", "status", "status_reason", "grade",
+    "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_inform", "lot_id", "status", "status_reason", "grade",
     "lot_type", "lot_level", "cur_qty", "carr_id", "bay_name", "proc_id", "order_seq", "sample_step_type",
     "metal_status", "layer_id", "step_level", "연속", "step_seq", "step_desc", "recipe_id", "tkintype",
     "batch_kind", "eqp_type", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp", "투입경과일_일",
     "step도착경과_일", "마지막event경과_일", "start_date", "last_tkout_date", "step_arrive_date", "last_event_date",
     "exclusion_type",
 ]
-FINAL_REQUIRED_CONCAT_COLUMNS = ["lot_id", "step_seq", "order_seq", "status", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp", "exclusion_type"]
+FINAL_REQUIRED_CONCAT_COLUMNS = ["lot_inform", "lot_id", "step_seq", "order_seq", "status", "eqpgroup", "eqpgroup_cham", "prevent", "issue_eqp", "exclusion_type"]
 
 
 class WipBuildError(Exception):
@@ -499,6 +494,60 @@ def log_duplicate_keys(df: pd.DataFrame, keys: list[str], name: str, limit: int 
         print(df.loc[dup_mask, keys].value_counts().head(limit))
 
 
+def _keynorm_series(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).str.strip().str.upper()
+
+
+def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd.DataFrame:
+    print(f"[mcpath 생성] mclot rows: {len(mclot)}")
+    print(f"[mcpath 생성] steppath rows: {len(steppath)}")
+    _assert_required_columns(mclot, "mclot")
+    _assert_required_columns(steppath, "steppath")
+    m = mclot.copy()
+    p = steppath.copy()
+    for c in ["lot_id", "proc_id", "order_seq", "step_seq", "de_rank", "delay_step_type", "status"]:
+        if c in m.columns:
+            m[f"__k_{c}"] = _keynorm_series(m[c])
+        if c in p.columns:
+            p[f"__k_{c}"] = _keynorm_series(p[c])
+
+    current = m.merge(p, left_on=["__k_lot_id", "__k_order_seq"], right_on=["__k_lot_id", "__k_order_seq"], how="left", suffixes=("_m", ""))
+    print(f"[mcpath 생성] 현재 step 조인 rows: {len(current)}")
+    mismatch = int((current["__k_step_seq_m"] != current["__k_step_seq"]).sum()) if "__k_step_seq" in current.columns else 0
+    print(f"[mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: {mismatch}")
+
+    expand_mask = (current["__k_delay_step_type"] == "S") & (current["__k_status"] != "RUN")
+    expand_target = current.loc[expand_mask].copy()
+    print(f"[mcpath 생성] 연속공정 확장 대상 rows: {len(expand_target)}")
+    lot_base = m.drop(columns=[c for c in m.columns if c.startswith("__k_")]).copy()
+    lot_base["__k_lot_id"] = _keynorm_series(m["lot_id"])
+    expanded = (
+        expand_target[["__k_lot_id", "__k_de_rank"]]
+        .drop_duplicates()
+        .merge(p, on=["__k_lot_id", "__k_de_rank"], how="left")
+        .merge(lot_base, on="__k_lot_id", how="left", suffixes=("", "_m"))
+    )
+    keep_current = current.loc[~expand_mask].copy()
+    base_cols = [c for c in current.columns if not c.startswith("__k_")]
+    if not expanded.empty:
+        expanded = expanded.rename(columns={c: c.replace("_m", "") for c in expanded.columns})
+        expanded = expanded[[c for c in base_cols if c in expanded.columns]]
+        mcpath = pd.concat([keep_current[base_cols], expanded], ignore_index=True, sort=False)
+    else:
+        mcpath = keep_current[base_cols].copy()
+    print(f"[mcpath 생성] 연속공정 확장 후 rows: {len(mcpath)}")
+
+    need = ["sysdate","cur_line_id","sys_line_id","lot_inform","lot_id","carr_id","grade","lot_type","lot_level","cur_qty","bay_name","status","proc_id","order_seq","sample_step_type","metal_status","de_rank","delay_step_type","연속","layer_id","step_level","step_seq","step_desc","eqp_type","eqp_group_raw","eqp_id","recipe_id","tkintype","tkin_type_detail","start_date","last_tkout_date","step_arrive_date","last_event_date"]
+    for c in need:
+        if c not in mcpath.columns:
+            mcpath[c] = pd.NA
+    mcpath = mcpath[need]
+    print(f"[mcpath 생성] 최종 mcpath rows: {len(mcpath)}")
+    print(f"[mcpath 생성] lot_inform 존재 여부: {'lot_inform' in mcpath.columns}")
+    print(f"[mcpath 생성] lot_inform non-empty rows: {int(mcpath['lot_inform'].map(lambda v: not is_blank(v)).sum())}")
+    return mcpath
+
+
 def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: pd.DataFrame) -> pd.DataFrame:
     print(f"[행수 점검] mcpath 원본: {len(mcpath)}")
     print(f"[행수 점검] eqp 원본: {len(eqp)}")
@@ -648,6 +697,10 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     hold_work = hold.copy()
     hold_work["lot_id"] = hold_work["lot_id"].fillna("").astype(str).str.strip()
     hold_work["step_seq"] = hold_work["step_seq"].fillna("").astype(str).str.strip()
+    if "item_type" not in hold_work.columns:
+        for c in ["item_type", "hold_user", "hold_reason", "hold_date"]:
+            if c not in hold_work.columns:
+                hold_work[c] = pd.NA
     hold_work["item_type"] = hold_work["item_type"].fillna("").astype(str).str.strip().str.upper()
     hold_work["category"] = hold_work["item_type"].map({
         "EXCEPTION": "예약제외",
@@ -1136,18 +1189,21 @@ def main() -> None:
     paths = {
         "eqp": Path(EQP_PATH),
         "hold": Path(HOLD_PATH),
-        "mcpath": Path(MCPATH_PATH),
+        "mclot": Path(MCLOT_PATH),
+        "steppath": Path(STEPPATH_PATH),
         "tip": Path(TIP_PATH),
     }
 
-    mcpath, mcpath_meta = read_input_csv("mcpath", paths["mcpath"])
-    eqp, eqp_meta = read_input_csv("eqp", paths["eqp"])
+    mclot, mclot_meta = read_input_csv("mclot", paths["mclot"])
+    steppath, steppath_meta = read_input_csv("steppath", paths["steppath"])
+    eqp, eqp_meta = read_input_csv("eqpmaster", paths["eqp"])
     tip, tip_meta = read_input_csv("tip", paths["tip"])
     hold, hold_meta = read_input_csv("hold", paths["hold"])
+    mcpath = build_mcpath_from_raw_raw(mclot, steppath)
+    _assert_required_columns(mcpath, "mcpath")
 
     wip = build_wip(mcpath, eqp, tip, hold)
-
-    output_path = next_available_path(script_dir / "output_wip.xlsx")
+    print(f"[wip 상세] 내부 상세 rows: {len(wip)}")
     dup_cnt = int(wip.duplicated().sum())
     if dup_cnt > 0:
         print(f"[경고] 최종 wip 완전중복 rows가 {dup_cnt}건입니다. duplicate_debug 파일을 저장합니다.")
@@ -1158,23 +1214,24 @@ def main() -> None:
         wip = wip.drop_duplicates()
         print(f"[중복 보정] 원인 축약 후에도 완전중복 {before - len(wip)}건이 남아 최종 저장 전 drop_duplicates로 제거했습니다.")
 
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        wip.to_excel(writer, index=False)
-    print(f"[wip 저장 완료] 경로: {output_path}")
-
     wip_concat = build_wip_concat(wip)
+    wip_concat = enforce_final_concat_columns(wip_concat)
+    if "lot_inform" not in wip_concat.columns:
+        raise WipBuildError("최종 output_wip_concat에 lot_inform 컬럼이 없습니다.")
+    if wip_concat.columns.get_loc("lot_inform") != wip_concat.columns.get_loc("lot_id") - 1:
+        raise WipBuildError("lot_inform은 lot_id 바로 왼쪽에 위치해야 합니다.")
+    print(f"[검증] lot_inform non-empty rows: {int(wip_concat['lot_inform'].map(lambda v: not is_blank(v)).sum())}")
     output_concat_path = next_available_path(script_dir / "output_wip_concat.xlsx")
     with pd.ExcelWriter(output_concat_path, engine="openpyxl") as writer:
         wip_concat.to_excel(writer, index=False)
     print(f"[concat 저장 완료] 경로: {output_concat_path}")
 
     print("[입력 파일 요약]")
-    for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("mcpath", mcpath_meta), ("tip", tip_meta)]:
+    for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("tip", tip_meta), ("mclot", mclot_meta), ("steppath", steppath_meta)]:
         print(f"- {name} path: {meta['path']}")
         print(f"  size={meta['size']} bytes, rows={meta['rows']}, cols={meta['cols']}, encoding={meta['encoding']}, sep={meta['separator']}")
 
     print(f"[wip] row={len(wip)}, col={len(wip.columns)}")
-    print(f"[결과 요약] output_wip rows: {len(wip)}")
     print(f"[결과 요약] output_wip_concat rows: {len(wip_concat)}")
 
 
