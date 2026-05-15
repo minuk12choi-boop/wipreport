@@ -1,4 +1,3 @@
-<현재의 에러 로그>
 PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
 [입력 확인] mclot: C:\Users\minuk12.choi\Documents\zhbm_mclot.csv / size=32656 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
 [CSV 읽기 성공] mclot: encoding=utf-16, sep=',', rows=77, cols=19
@@ -19,18 +18,16 @@ PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create
 [mcpath 생성] steppath rows: 40820
 [mcpath 생성] 현재 step 조인 rows: 139
 [mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: 0
-[mcpath 생성] 연속공정 확장 대상 rows: 25
+[mcpath 생성] mclot.proc_id와 steppath.proc_id 불일치 rows: 0
 Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1240, in <module>
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1359, in <module>
     main()
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1202, in main
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1321, in main
     mcpath = build_mcpath_from_raw_raw(mclot, steppath)
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 535, in build_mcpath_from_raw_raw
-    mcpath = pd.concat([keep_current[base_cols], expanded], ignore_index=True, sort=False)
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\reshape\concat.py", line 395, in concat
-    return op.get_result()
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\reshape\concat.py", line 680, in get_result
-    indexers[ax] = obj_labels.get_indexer(new_labels)
-  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pandas\core\indexes\base.py", line 3885, in get_indexer
-    raise InvalidIndexError(self._requires_unique_msg)
-pandas.errors.InvalidIndexError: Reindexing only valid with uniquely valued Index objects
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 626, in build_mcpath_from_raw_raw
+    current_selected = select_mcpath_columns_from_joined(joined)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 565, in select_mcpath_columns_from_joined
+    out["lot_id"] = pick_col(joined, ["lot_id"], "lot_id")
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 551, in pick_col
+    raise RuntimeError(f"{label} 컬럼을 찾을 수 없습니다. 후보={candidates}") 
+RuntimeError: lot_id 컬럼을 찾을 수 없습니다. 후보=['lot_id']
