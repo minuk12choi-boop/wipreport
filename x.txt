@@ -1,78 +1,8 @@
-PS D:\PERSONAL_SPACE\SW\python> python D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py
-[입력 확인] mclot: C:\Users\minuk12.choi\Documents\zhbm_mclot.csv / size=32656 bytes / signature=b'\xff\xfeS\x00Y\x00S\x00D\x00A\x00T\x00E\x00,\x00C\x00U\x00R\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00,\x00S\x00Y\x00S\x00_\x00L\x00I\x00N\x00E\x00_\x00I\x00D\x00'
-[CSV 읽기 성공] mclot: encoding=utf-16, sep=',', rows=77, cols=19
-[컬럼 확인] mclot: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_inform', 'lot_id', 'grade', 'carr_id', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id', 'order_seq', 'step_seq', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date']
-[입력 확인] steppath: C:\Users\minuk12.choi\Documents\zhbm_steppath.csv / size=10456622 bytes / signature=b'\xff\xfeL\x00O\x00T\x00_\x00I\x00D\x00,\x00P\x00R\x00O\x00C\x00_\x00I\x00D\x00,\x00S\x00A\x00M\x00P\x00L\x00E\x00_\x00S\x00T\x00E\x00P\x00_\x00T\x00Y\x00P\x00E\x00'
-[CSV 읽기 성공] steppath: encoding=utf-16, sep=',', rows=40820, cols=18
-[컬럼 확인] steppath: ['lot_id', 'proc_id', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', '연속', 'layer_id', 'step_level', 'order_seq', 'step_seq', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail']
-[입력 확인] eqpmaster: C:\Users\minuk12.choi\Documents\eqpmaster.csv / size=220300 bytes / signature=b'\xff\xfeE\x00Q\x00P\x00_\x00I\x00D\x00,\x00B\x00A\x00T\x00C\x00H\x00_\x00K\x00I\x00N\x00D\x00,\x00E\x00Q\x00P\x00L\x00I\x00N\x00E\x00,\x00B\x00O\x00D\x00Y\x00_\x00'
-[CSV 읽기 성공] eqpmaster: encoding=utf-16, sep=',', rows=1985, cols=5        
-[컬럼 확인] eqpmaster: ['eqp_id', 'batch_kind', 'eqpline', 'body_eqp_status', 'body_status_change_time']
-[입력 확인] tip: C:\Users\minuk12.choi\Documents\tip.csv / size=484931504 bytes / signature=b'\xff\xfeP\x00R\x00O\x00C\x00E\x00S\x00S\x00,\x00S\x00T\x00E\x00P\x00,\x00P\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00I\x00D\x00,\x00E\x00Q\x00P\x00C\x00H\x00A\x00M\x00'
-[CSV 읽기 성공] tip: encoding=utf-16, sep=',', rows=2245180, cols=16
-[컬럼 확인] tip: ['process', 'step', 'ppid', 'eqpid', 'eqpcham', 'chamberid', 'batch_kind', 'prevent', 'type_body', 'type_cham', 'tip_eventtime', 'eqpissue', 'body_eqp_status', 'cham_eqp_status', 'eqpissuetime', 'eqpline']
-[입력 확인] hold: C:\Users\minuk12.choi\Documents\hold.csv / size=12606322 bytes / signature=b'\xff\xfeI\x00T\x00E\x00M\x00_\x00T\x00Y\x00P\x00E\x00,\x00L\x00O\x00T\x00_\x00I\x00D\x00,\x00S\x00T\x00E\x00P\x00_\x00S\x00E\x00Q\x00,\x00H\x00O\x00L\x00D\x00_\x00'
-[CSV 읽기 성공] hold: encoding=utf-16, sep=',', rows=46764, cols=6
-[컬럼 확인] hold: ['item_type', 'lot_id', 'step_seq', 'hold_user', 'hold_reason', 'hold_date']
-[mcpath 생성] mclot rows: 77
-[mcpath 생성] steppath rows: 40820
-[mcpath 생성] 현재 step 조인 rows: 139
-[mcpath 생성] 현재 step joined columns 수: 41
-[mcpath 생성] 현재 step joined columns 예시: ['sysdate', 'cur_line_id', 'sys_line_id', 'lot_inform', 'lot_id_mclot', 'grade', 'carr_id', 'lot_type', 'lot_level', 'cur_qty', 'bay_name', 'status', 'proc_id_mclot', 'order_seq_mclot', 'step_seq_mclot', 'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date', '_lot_key', '_order_key', '_de_rank_key_mclot', 'lot_id_path', 'proc_id_path', 'sample_step_type', 'metal_status', 'de_rank', 'delay_step_type', ' 연속', 'layer_id', 'step_level', 'order_seq_path', 'step_seq_path', 'step_desc', 'eqp_type', 'eqp_group_raw', 'eqp_id', 'recipe_id', 'tkintype', 'tkin_type_detail', '_de_rank_key_path']
-[mcpath 생성] 현재 step joined lot/proc/order/step 관련 columns: ['lot_inform', 'lot_id_mclot', 'lot_type', 'lot_level', 'proc_id_mclot', 'order_seq_mclot', 'step_seq_mclot', 'step_arrive_date', '_lot_key', '_order_key', '_de_rank_key_mclot', 'lot_id_path', 'proc_id_path', 'sample_step_type', 'delay_step_type', 'step_level', 'order_seq_path', 'step_seq_path', 'step_desc']
-[mcpath 생성] mclot.step_seq와 steppath.step_seq 불일치 rows: 0
-[mcpath 생성] mclot.proc_id와 steppath.proc_id 불일치 rows: 0
-[mcpath 생성] 연속공정 확장 대상 rows: 25
-[mcpath 생성] keep_current rows: 114
-[mcpath 생성] expanded joined columns 수: 54
-[mcpath 생성] expanded joined lot/proc/order/step 관련 columns: ['lot_inform', 'lot_id_cur', 'lot_type', 'lot_level', 'proc_id_cur', 'order_seq_cur', 'sample_step_type_cur', 'delay_step_type_cur', 'step_level_cur', 'step_seq_cur', 'step_desc_cur', 'step_arrive_date', '_lot_key', 'lot_id_path', 'proc_id_path', 'sample_step_type_path', 'delay_step_type_path', 'step_level_path', 'order_seq_path', 'step_seq_path', 'step_desc_path', '_order_key']
-[mcpath 생성] 연속공정 확장 후 rows: 238
-[mcpath 생성] concat 전 keep_current rows: 114
-[mcpath 생성] concat 전 expanded rows: 238
-[mcpath 생성] 최종 mcpath rows: 352
-[mcpath 생성] 최종 mcpath columns 중복 여부: False
-[mcpath 생성] lot_inform 존재 여부: True
-[mcpath 생성] lot_inform non-empty rows: 310
-[행수 점검] mcpath 원본: 352
-[행수 점검] eqp 원본: 1985
-[행수 점검] tip 원본: 2245180
-[행수 점검] hold 원본: 46764
-[키 분포 점검] eqp 조인 키: keys=['eqp_id'], duplicated_rows=0, duplicated_groups=0
-[키 분포 점검] exact tip 조인 키(챔버 포함): keys=['process', 'step', 'eqpid', 'ppid', 'eqpcham', 'chamberid'], duplicated_rows=102, duplicated_groups=15   
-Series([], Name: count, dtype: int64)
-[키 분포 점검] hold 조인 키: keys=['lot_id', 'step_seq'], duplicated_rows=10050, duplicated_groups=4918
-lot_id     step_seq
-    4
-    4
-    3
-    3
-    3
-    3
-    3
-    3
-    3
-    3 
-Name: count, dtype: int64
-[키 분포 점검] hold item_type 포함 키: keys=['lot_id', 'step_seq', 'item_type'], duplicated_rows=1139, duplicated_groups=565
-lot_id     step_seq      item_type
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     3
-     HOLD LOT     2
-Name: count, dtype: int64
-[축약 점검] eqp 축약 전/후 rows: 1985 -> 1985
-[행수 점검] mcpath + eqp 조인 후 rows: 352
-[중복 점검] mcpath + eqp 조인 후 완전중복 rows: 3
-[축약 점검] exact tip 축약 후 rows: 2192239
-[행수 점검] exact tip 조인 전 rows: 352
-[행수 점검] exact tip 조인 후 rows: 970
-[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이 로 인한 증가인지 점검합니다.
-[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: 6
-오류: exact tip 조인 후 전체 컬럼 기준 완전중복 rows가 6건입니다.
-PS D:\PERSONAL_SPACE\SW\python> 
+conn = pymysql.connect(
+            host="12.81.64.130",
+            user="minuk12.choi",
+            passwd="Test1234!@",
+            port=3306,
+            db="app_db",
+            charset="utf8mb4",
+        )

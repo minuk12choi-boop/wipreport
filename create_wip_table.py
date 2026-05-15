@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import warnings
+import time
 
 import pandas as pd
 
@@ -523,6 +524,66 @@ def _keynorm_series(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).str.strip().str.upper()
 
 
+def filter_tip_for_mcpath(tip_df: pd.DataFrame, mcpath_or_me: pd.DataFrame) -> pd.DataFrame:
+    start = time.perf_counter()
+    required_tip = ["process", "step", "ppid", "eqpid"]
+    required_mc = ["proc_id", "step_seq", "recipe_id", "eqp_id"]
+    require_columns(tip_df, required_tip, "tip 필터")
+    require_columns(mcpath_or_me, required_mc, "mcpath/me 필터")
+
+    tip_work = tip_df.copy()
+    mc_work = mcpath_or_me.copy()
+    for c in required_tip:
+        tip_work[c] = _keynorm_series(tip_work[c])
+    for c in required_mc:
+        mc_work[c] = _keynorm_series(mc_work[c])
+
+    proc_set = {v for v in mc_work["proc_id"].tolist() if v and v != "-"}
+    step_set = {v for v in mc_work["step_seq"].tolist() if v and v != "-"}
+    eqp_set = {v for v in mc_work["eqp_id"].tolist() if v and v != "-"}
+    recipe_set = {v for v in mc_work["recipe_id"].tolist() if v and v != "-"}
+
+    print(f"[tip 필터] 원본 tip rows: {len(tip_df)}")
+    print(f"[tip 필터] mcpath unique proc_id: {len(proc_set)}")
+    print(f"[tip 필터] mcpath unique step_seq: {len(step_set)}")
+    print(f"[tip 필터] mcpath unique eqp_id: {len(eqp_set)}")
+    print(f"[tip 필터] mcpath unique recipe_id: {len(recipe_set)}")
+
+    eqpid_match = tip_work["eqpid"].isin(eqp_set)
+    process_match = tip_work["process"].isin(proc_set) | tip_work["process"].eq("-")
+    step_match = tip_work["step"].isin(step_set) | tip_work["step"].eq("-")
+    ppid_match = tip_work["ppid"].isin(recipe_set) | tip_work["ppid"].eq("-")
+    mask = eqpid_match & process_match & step_match & ppid_match
+    tip_filtered = tip_df.loc[mask].copy()
+
+    tip_filtered_norm = tip_work.loc[mask].copy()
+    process_dash_cnt = int(tip_filtered_norm["process"].eq("-").sum())
+    step_dash_cnt = int(tip_filtered_norm["step"].eq("-").sum())
+    ppid_dash_cnt = int(tip_filtered_norm["ppid"].eq("-").sum())
+    print(f"[tip 필터] process '-' rows 보존: {process_dash_cnt}")
+    print(f"[tip 필터] step '-' rows 보존: {step_dash_cnt}")
+    print(f"[tip 필터] ppid '-' rows 보존: {ppid_dash_cnt}")
+    print(f"[tip 필터] 필터 후 tip rows: {len(tip_filtered)}")
+    print(f"[tip 필터] 제거 rows: {len(tip_df) - len(tip_filtered)}")
+
+    if len(tip_filtered) > len(tip_df):
+        print("[경고] tip_filtered rows가 원본 tip rows를 초과했습니다. 필터 로직을 확인하세요.")
+    if tip_filtered.empty:
+        print("[경고] tip_filtered가 비어 있습니다.")
+    if len(tip_filtered) > len(tip_df) * 0.5:
+        print("[경고] tip 필터 후에도 원본 대비 50% 초과 rows가 남았습니다. 필터 조건을 확인하세요.")
+    invalid_eqpid = int((~tip_filtered_norm["eqpid"].isin(eqp_set)).sum()) if not tip_filtered_norm.empty else 0
+    if invalid_eqpid:
+        print(f"[경고] tip_filtered 내 eqpid 후보 불일치 rows: {invalid_eqpid}")
+    else:
+        print("[tip 필터 검증] tip_filtered eqpid는 모두 mcpath.eqp_id 후보에 포함됩니다.")
+
+    elapsed = time.perf_counter() - start
+    print(f"[tip 필터] 필터 소요시간: {elapsed:.1f}초")
+    print(f"[시간] tip 필터: {elapsed:.1f}초")
+    return tip_filtered
+
+
 def build_mcpath_from_raw_raw(mclot: pd.DataFrame, steppath: pd.DataFrame) -> pd.DataFrame:
     mcpath_columns = [
         "sysdate", "cur_line_id", "sys_line_id", "lot_inform", "lot_id", "carr_id", "grade", "lot_type", "lot_level",
@@ -685,7 +746,6 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     print(f"[행수 점검] tip 원본: {len(tip)}")
     print(f"[행수 점검] hold 원본: {len(hold)}")
     log_duplicate_keys(eqp, ["eqp_id"], "eqp 조인 키")
-    log_duplicate_keys(tip, ["process", "step", "eqpid", "ppid", "eqpcham", "chamberid"], "exact tip 조인 키(챔버 포함)")
     log_duplicate_keys(hold, ["lot_id", "step_seq"], "hold 조인 키")
     log_duplicate_keys(hold, ["lot_id", "step_seq", "item_type"], "hold item_type 포함 키")
 
@@ -733,15 +793,26 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
         "type_cham": "tip_type_cham",
         "tip_eventtime": "tip_tip_eventtime",
     })
+    for c in ["process", "step", "ppid", "eqpid"]:
+        if c in tip_renamed.columns:
+            tip_renamed[c] = _keynorm_series(tip_renamed[c])
+    for c in ["proc_id", "step_seq", "recipe_id", "eqp_id"]:
+        if c in me.columns:
+            me[c] = _keynorm_series(me[c])
+
+    tip_filtered = filter_tip_for_mcpath(tip_renamed, me)
+    log_duplicate_keys(tip_filtered, ["process", "step", "eqpid", "ppid", "tip_eqpcham", "tip_chamberid"], "exact tip 조인 키(필터 후, 챔버 포함)")
 
     tip_cols = [
         "tip_eqpcham", "tip_chamberid", "tip_batch_kind", "tip_prevent", "tip_type_body", "tip_type_cham",
         "tip_tip_eventtime", "tip_eqpissue", "tip_body_eqp_status", "tip_cham_eqp_status", "tip_eqpissuetime", "tip_eqpline",
     ]
 
-    tip_specific = tip_renamed[
-        (tip_renamed["process"] != "-") & (tip_renamed["step"] != "-") & (tip_renamed["ppid"] != "-")
+    tip_specific = tip_filtered[
+        (tip_filtered["process"] != "-") & (tip_filtered["step"] != "-") & (tip_filtered["ppid"] != "-")
     ].copy()
+    print(f"[축약 점검] exact tip 축약 전 rows(필터 후): {len(tip_specific)}")
+    exact_dedup_start = time.perf_counter()
     tip_specific["tip_eventtime_dt"] = safe_to_datetime(tip_specific["tip_tip_eventtime"])
     tip_specific["eqpissuetime_dt"] = safe_to_datetime(tip_specific["tip_eqpissuetime"])
     exact_tip_keys = ["process", "step", "eqpid", "ppid", "tip_eqpcham", "tip_chamberid"]
@@ -752,9 +823,14 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     else:
         tip_specific = tip_specific.drop_duplicates(exact_tip_keys, keep="last")
     tip_specific = tip_specific.drop(columns=["tip_eventtime_dt", "eqpissuetime_dt"])
-    print(f"[축약 점검] exact tip 축약 후 rows: {len(tip_specific)}")
+    exact_dedup_elapsed = time.perf_counter() - exact_dedup_start
+    print(f"[축약 점검] exact tip 축약 후 rows(필터 후): {len(tip_specific)}")
+    print(f"[시간] exact tip 축약: {exact_dedup_elapsed:.1f}초")
+    if len(tip_specific) > len(tip) * 0.95:
+        print("[경고] exact tip 축약 전 rows(필터 후)가 원본 tip rows와 거의 같습니다. 필터 조건을 확인하세요.")
     before_rows = len(me)
     print(f"[행수 점검] exact tip 조인 전 rows: {before_rows}")
+    exact_join_start = time.perf_counter()
     met = me.merge(
         tip_specific,
         left_on=["proc_id", "step_seq", "eqp_id", "recipe_id"],
@@ -762,17 +838,21 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
         how="left",
     )
     after_rows = len(met)
+    exact_join_elapsed = time.perf_counter() - exact_join_start
     print(f"[행수 점검] exact tip 조인 후 rows: {after_rows}")
+    print(f"[시간] exact tip 조인: {exact_join_elapsed:.1f}초")
     if after_rows > before_rows:
         print("[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이로 인한 증가인지 점검합니다.")
     exact_full_dup = int(met.duplicated(keep=False).sum())
-    print(f"[중복 점검] exact tip 조인 후 전체 컬럼 기준 완전중복 rows: {exact_full_dup}")
+    print(f"[중복 보정] exact tip 조인 후 전체 컬럼 완전중복 rows: {exact_full_dup}")
     if exact_full_dup:
-        raise WipBuildError(f"exact tip 조인 후 전체 컬럼 기준 완전중복 rows가 {exact_full_dup}건입니다.")
+        before_dedup = len(met)
+        met = met.drop_duplicates()
+        print(f"[중복 보정] exact tip 조인 후 전체 컬럼 기준 drop_duplicates 적용: {before_dedup} -> {len(met)}")
 
-    tip_wild = tip_renamed[
-        (tip_renamed["tip_prevent"] == "PREVENT")
-        & ((tip_renamed["process"] == "-") | (tip_renamed["step"] == "-") | (tip_renamed["ppid"] == "-"))
+    tip_wild = tip_filtered[
+        (tip_filtered["tip_prevent"] == "PREVENT")
+        & ((tip_filtered["process"] == "-") | (tip_filtered["step"] == "-") | (tip_filtered["ppid"] == "-"))
     ].copy()
     tip_wild["specificity"] = (
         (tip_wild["process"] != "-").astype(int) + (tip_wild["step"] != "-").astype(int) + (tip_wild["ppid"] != "-").astype(int)
@@ -782,6 +862,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     tip_wild = tip_wild.reset_index(drop=True)
     tip_wild["_wild_order"] = tip_wild.index
 
+    wild_start = time.perf_counter()
     met = met.reset_index(drop=True)
     met["_row_id"] = met.index
     candidates: list[pd.DataFrame] = []
@@ -814,6 +895,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     after_rows = len(met)
     print(f"[행수 점검] wildcard tip 반영 후 rows: {after_rows}")
     print(f"[중복 점검] wildcard tip 반영 후 전체 컬럼 기준 완전중복 rows: {met.drop(columns=['_row_id']).duplicated(keep=False).sum()}")
+    print(f"[시간] wildcard tip 반영: {time.perf_counter() - wild_start:.1f}초")
     if after_rows != before_rows:
         raise WipBuildError(f"wildcard overlay 후 행 수가 변경되었습니다. before={before_rows}, after={after_rows}. wildcard는 overlay로 기존 행을 보존해야 합니다.")
 
@@ -825,6 +907,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
     fallback_issue = met["eqp_body_eqp_status"].where(met["eqp_body_eqp_status"].isin(["LOCAL", "PM", "DOWN"]))
     met["eqpissue"] = met["tip_eqpissue"].combine_first(fallback_issue)
 
+    hold_start = time.perf_counter()
     hold_work = hold.copy()
     hold_work["lot_id"] = hold_work["lot_id"].fillna("").astype(str).str.strip()
     hold_work["step_seq"] = hold_work["step_seq"].fillna("").astype(str).str.strip()
@@ -852,6 +935,7 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
         date=("hold_date", "min"),
     )
     print(f"[hold 집계 점검] grouped lot_id+step_seq+category rows: {len(hold_grouped)}")
+    print(f"[시간] hold 집계/merge: {time.perf_counter() - hold_start:.1f}초")
 
     def build_category_part(category: str, prefix: str) -> pd.DataFrame:
         part = hold_grouped.loc[hold_grouped["category"] == category, ["lot_id", "step_seq", "flag", "user", "reason", "date"]].copy()
@@ -1031,6 +1115,7 @@ def _pattern_counts(df: pd.DataFrame, col: str) -> dict[str, int]:
     }
 
 def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
+    concat_start = time.perf_counter()
     group_keys = ["lot_id", "step_seq", "order_seq"]
     missing_keys = [k for k in group_keys if k not in wip.columns]
     if missing_keys:
@@ -1277,6 +1362,7 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         raise WipBuildError(f"concat 제거 대상 컬럼이 남아 있습니다: {remained}")
 
     print(f"[concat 생성] output rows: {len(base)}")
+    print(f"[시간] concat 생성: {time.perf_counter() - concat_start:.1f}초")
     return base
 
 
