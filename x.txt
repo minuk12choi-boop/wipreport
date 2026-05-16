@@ -1,142 +1,38 @@
-Name: count, dtype: int64
-[축약 점검] eqp 축약 전/후 rows: 1985 -> 1985
-[행수 점검] mcpath + eqp 조인 후 rows: 352
-[중복 점검] mcpath + eqp 조인 후 완전중복 rows: 3
-[tip 필터] 원본 tip rows: 2245180
-[tip 필터] mcpath unique proc_id: 4
-[tip 필터] mcpath unique step_seq: 116
-[tip 필터] mcpath unique eqp_id: 85
-[tip 필터] mcpath unique recipe_id: 89
-[tip 필터] process '-' rows 보존: 4
-[tip 필터] step '-' rows 보존: 4
-[tip 필터] ppid '-' rows 보존: 0
-[tip 필터] 필터 후 tip rows: 560
-[tip 필터] 제거 rows: 2244620
-[tip 필터 검증] tip_filtered eqpid는 모두 mcpath.eqp_id 후보에 포함됩니다.    
-[tip 필터] 필터 소요시간: 3.3초
-[시간] tip 필터: 3.3초
-[키 분포 점검] exact tip 조인 키(필터 후, 챔버 포함): keys=['process', 'step', 'eqpid', 'ppid', 'tip_eqpcham', 'tip_chamberid'], duplicated_rows=14, duplicated_groups=2
-Series([], Name: count, dtype: int64)
-[축약 점검] exact tip 축약 전 rows(필터 후): 556
-[축약 점검] exact tip 축약 후 rows(필터 후): 544
-[시간] exact tip 축약: 0.1초
-[행수 점검] exact tip 조인 전 rows: 352
-[행수 점검] exact tip 조인 후 rows: 970
-[시간] exact tip 조인: 0.0초
-[안내] exact tip 조인으로 rows가 증가했습니다. tip_eqpcham/tip_chamberid 차이 로 인한 증가인지 점검합니다.
-[중복 보정] exact tip 조인 후 전체 컬럼 완전중복 rows: 6
-[중복 보정] exact tip 조인 후 전체 컬럼 기준 drop_duplicates 적용: 970 -> 967 
-[행수 점검] wildcard tip 반영 후 rows: 967
-[중복 점검] wildcard tip 반영 후 전체 컬럼 기준 완전중복 rows: 0
-[시간] wildcard tip 반영: 0.0초
-[hold 집계 점검] hold raw rows: 46764
-[hold 집계 점검] category 적용 rows: 46764
-[hold 집계 점검] grouped lot_id+step_seq+category rows: 46055
-[시간] hold 집계/merge: 24.9초
-[hold 집계 점검] 최종 hold_summary rows: 41632
-[hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: 0
-[hold flag 점검] source keys: 41632, result keys: 41632
-[hold flag 점검] 원천에 없는 category를 포함한 결과 rows: 0
-[hold merge 점검] met rows: 967
-[hold merge 점검] met unique lot_id+step_seq: 146
-[키 분포 점검] met lot_id+step_seq 중복 rows: 923
-[안내] met는 lot_id+step_seq 기준 여러 행이 정상일 수 있습니다. tip_eqpcham/tip_chamberid 등 챔버 정보가 다르면 보존합니다.
-[hold merge 점검] hold_summary rows: 41632
-[hold merge 점검] hold_summary columns: ['lot_id', 'step_seq', '예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
-[hold merge 점검] hold_summary duplicate key rows: 0
-[hold merge 점검] key overlap unique count: 32
-[행수 점검] hold merge 후 rows: 967
-[중복 점검] hold merge 후 전체 컬럼 기준 완전중복 rows: 0
-[행수 점검] 최종 wip rows: 967
-[중복 점검] 최종 wip 전체 컬럼 기준 완전중복 rows: 0
-[챔버 보존 점검] 같은 lot_id+step_seq 내 tip_eqpcham/tip_chamberid 다중 조합 group 수: 74
-[챔버 보존 점검] 해당 행들은 중복 제거 대상이 아닙니다.
-[wip 상세] 내부 상세 rows: 967
-[concat 생성] 기준 그룹: lot_id, step_seq, order_seq
-[concat 생성] input rows: 967
-[eqpgroup_cham 보정] 보정 전 blank rows: 27
-[eqpgroup_cham 보정] eqpgroup으로 대체한 rows: 27
-[eqpgroup_cham 보정] 보정 후 blank rows: 0
-[eqpgroup_cham 검증] eqpgroup 존재 + eqpgroup_cham blank rows: 0
-[eqpline 점검] output_wip eqp_eqpline 존재: True
-[eqpline 점검] output_wip eqp_eqpline non-blank rows: 967
-[eqpline 점검] output_wip_concat eqpline non-blank rows: 146
-[eqpline 점검] output_wip_concat eqpline blank rows: 0
-[concat 경과일] step도착경과_일 / 마지막event경과_일 DAY 단위 계산 완료
-[prevent 진단] 대상 row 수: 0
-[prevent 진단] sysdate 파싱 성공: 0 / 0
-[prevent 진단] tip_tip_eventtime 컬럼 존재: True
-[prevent 진단] 경과일계산불가 item 수: 0
-[concat 검증] prevent tip_tip_eventtime 기준 경과일 계산 완료
-[issue_eqp 진단] 대상 row 수: 151
-[issue_eqp 진단] sysdate 파싱 성공: 151 / 151
-[issue_eqp 진단] eqpissuetime 후보 컬럼 존재 여부: {'eqpissuetime': True, 'tip_eqpissuetime': True}
-[issue_eqp 진단] eqp_body_status_change_time 후보 존재 여부: {'eqp_body_status_change_time': True, 'body_status_change_time': False, 'body_status_change_time_eqp': False}
-[issue_eqp 진단] eqpissuetime non-blank: 151 / 151
-[issue_eqp 진단] eqpissuetime 길이분포 top5: {21: 151}
-[issue_eqp 진단] eqpissuetime pattern count: -= 151, /= 0, := 151, space= 151, .= 0
-[issue_eqp 진단] eqpissuetime masked samples: len=21 head='2026' tail='0:06', len=21 head='2026' tail='5:10', len=21 head='2026' tail='0:06'
-[issue_eqp 진단] tip_eqpissuetime non-blank: 147 / 151
-[issue_eqp 진단] tip_eqpissuetime 길이분포 top5: {21: 147}
-[issue_eqp 진단] tip_eqpissuetime pattern count: -= 147, /= 0, := 147, space= 147, .= 0
-[issue_eqp 진단] tip_eqpissuetime masked samples: len=21 head='2026' tail='7:30', len=21 head='2026' tail='7:30', len=21 head='2026' tail='7:30'
-[issue_eqp 진단] tip_tip_eventtime non-blank: 0 / 151
-[issue_eqp 진단] tip_tip_eventtime 길이분포 top5: {}
-[issue_eqp 진단] tip_tip_eventtime pattern count: -= 0, /= 0, := 0, space= 0, .= 0
-[issue_eqp 진단] tip_tip_eventtime masked samples: -
-[issue_eqp 진단] eqp_body_status_change_time non-blank: 151 / 151
-[issue_eqp 진단] eqp_body_status_change_time 길이분포 top5: {21: 151}
-[issue_eqp 진단] eqp_body_status_change_time pattern count: -= 151, /= 0, := 151, space= 151, .= 0
-[issue_eqp 진단] eqp_body_status_change_time masked samples: len=21 head='2026' tail='0:06', len=21 head='2026' tail='5:10', len=21 head='2026' tail='0:06' 
-[issue_eqp 진단] body_status_change_time non-blank: 0 / 151
-[issue_eqp 진단] body_status_change_time_eqp non-blank: 0 / 151
-[issue_eqp 진단] eqpissuetime primary 사용 가능 rows: 151
-[issue_eqp 진단] tip_eqpissuetime fallback 사용 rows: 0
-[issue_eqp 진단] eqp_body_status_change_time primary 사용 가능 rows: 151      
-[issue_eqp 진단] body_status_change_time fallback 사용 rows: 0
-[issue_eqp 진단] 기준일 계산 성공: 151 / 151
-[issue_eqp 진단] 경과일계산불가 item 수: 0
-[issue_eqp 검증] 기준일 성공 row 중 실제 경과일계산불가 item 수: 0
-[issue_eqp 검증] 실제 issue_eqp non-empty rows: 14
-[issue_eqp 검증] 실제 issue_eqp 경과일계산불가 포함 rows: 0
-[issue_eqp 검증] 실제 issue_eqp 일↑ 포함 rows: 14
-[concat 검증] issue_eqp 기준일 min(eqpissuetime, eqp_body_status_change_time) 계산 완료
-[status 재판정] WAIT 그룹 수: 69
-[status 재판정] WAIT(진행불가) 변경 수: 6
-[status 재판정] 조건1 FTP/예약제외: 2
-[status 재판정] 조건2 현스텝 모든 path 진행불가: 2
-[status 재판정] 조건3 연속후속 step 진행불가: 2
-[status 재판정] 완료
-[exclusion_type 진단] HOLD 대상 rows: 32
-[exclusion_type 진단] HOLD hold_date non-blank: 32
-[exclusion_type 진단] HOLD hold_date 파싱 성공: 32
-[exclusion_type 진단] FTP 대상 rows: 1
-[exclusion_type 진단] FTP ftp_date non-blank: 1
-[exclusion_type 진단] FTP ftp_date 파싱 성공: 1
-[exclusion_type 진단] 예약제외 대상 rows: 2
-[exclusion_type 진단] 예약제외 예약제외_date non-blank: 2
-[exclusion_type 진단] 예약제외 예약제외_date 파싱 성공: 2
-[concat 컬럼정리] exclusion_type 생성 완료
-[concat 컬럼정리] exclusion_type non-empty rows: 32 / 146
-[exclusion_type 진단] HOLD 라인 생성 rows: 32
-[exclusion_type 진단] FTP 라인 생성 rows: 1
-[exclusion_type 진단] 예약제외 라인 생성 rows: 2
-[exclusion_type 진단] 경과일계산불가 포함 rows: 0
-[exclusion_type 검증] 날짜값 존재 row 중 경과일계산불가 rows: 0
-[exclusion_type 검증] 실제 exclusion_type non-empty rows: 32
-[exclusion_type 검증] 실제 exclusion_type 경과일계산불가 포함 rows: 0
-[exclusion_type 검증] 실제 exclusion_type 일↑ 포함 rows: 32
-[exclusion_type 검증] 일↑ 포함 rows: 32
-[exclusion_type 검증] 경과일계산불가 포함 rows: 0
-[concat 생성] 제거 컬럼: ['eqp_id', 'tip_eqpcham', 'tip_chamberid', 'body_eqp_status', 'ppid', 'process', 'step', 'tip_prevent', 'tip_type_body', 'tip_type_cham', 'tip_tip_eventtime', 'tip_eqpissue', 'tip_body_eqp_status', 'tip_cham_eqp_status', 'tip_eqpissuetime', 'tip_eqpline', 'tip_batch_kind', 'eqpissuetime', 'eqp_group_raw', 'eqp_body_status_change_time']
-[concat 컬럼정리] eqpissuetime / eqp_group_raw 제거 완료
-[concat 생성] uniqueconcat 처리 컬럼: ['예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
-[concat 최종컬럼] allowlist 적용 전 columns=59
-[concat 최종컬럼] allowlist 적용 후 columns=39
-[concat 최종컬럼] 제거된 컬럼 수=20
-[concat 최종컬럼] 제거된 컬럼 예시=['de_rank', 'delay_step_type', 'tkin_type_detail', 'eqp_batch_kind', 'eqp_eqpline', 'eqp_body_eqp_status', 'eqpid', 'eqpissue', '예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
-[concat 최종컬럼] 최종 컬럼 검증 완료
-[concat 컬럼정리] status_reason 위치 조정 완료
-[concat 검증] issue_eqp 형식 점검 대상 rows: 14
-[concat 검증] issue_eqp 형식 오류 rows: 3
-오류: issue_eqp 형식 오류가 있습니다. DOWN/PM/LOCAL 블록 안의 각 item은 설비명(n.n일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.
+with
+h as (
+SELECT 
+    lot_id, lot_type, move, 일보date
+FROM (SELECT 
+a.*, 
+MAX(a.R) OVER (PARTITION BY a.lot_id, a.step_seq, a.process_eqp_id, a.ppid, a.tkout_date) AS `M`
+
+FROM (SELECT  
+    ROW_NUMBER() OVER (ORDER BY lot_id) AS `R`,
+    lot_id,  
+    lot_type,  
+    process_id,  
+    step_seq, 
+    ppid, 
+    (CASE WHEN lot_type IN ('PP','PB','PG') THEN component_qty END) AS move,  
+    process_eqp_id,
+    TO_TIMESTAMP(SUBSTR(lot_transn_time,1,15), 'yyyyMMdd HHmmss') AS `tkout_date`, 
+    (CASE  
+        WHEN SUBSTR(lot_transn_time, 10, 2) >= '22' THEN  
+            TO_DATE(DATE_ADD(TO_TIMESTAMP(SUBSTR(lot_transn_time, 1, 8), 'yyyyMMdd'), 1))
+        ELSE  
+            TO_DATE(TO_TIMESTAMP(SUBSTR(lot_transn_time, 1, 8), 'yyyyMMdd'))
+        END) AS `일보date`
+
+FROM fab.m_lot_transn_hist  
+WHERE lot_transn_type='TrackOut'  
+	AND sys_line_id='PFR1'           
+	AND lot_type IN ('PP','PB','PG')
+	AND tkin_date >= DATE_ADD(NOW(), -2)) a ) b
+
+WHERE R=M
+	AND 일보date >= 
+		DATE_ADD(CAST(NOW() AS DATE), -1))
+
+select 일보date, lot_id, lot_type, sum(move) as move
+from h
+group by 일보date, lot_id, lot_type
