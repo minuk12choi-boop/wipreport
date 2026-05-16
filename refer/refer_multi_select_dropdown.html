@@ -1,0 +1,14 @@
+<div class="multi-check-dropdown">
+    <button type="button" class="multi-check-trigger{% if selected_values %} has-values{% endif %}" title="{% if selected_values %}{{ selected_values|join:", " }}{% endif %}">
+        {% if selected_values %}
+            {{ selected_values|join:", " }}
+        {% else %}
+            선택
+        {% endif %}
+    </button>
+    <div class="multi-check-panel">
+        {% for option in options %}
+        <label><input type="checkbox" name="{{ row_prefix }}_{{ row_index }}" value="{{ option }}" {% if option in selected_values %}checked{% endif %}> {{ option }}</label>
+        {% endfor %}
+    </div>
+</div>

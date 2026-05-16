@@ -1,1 +1,12 @@
-body{font-family:Arial;background:#f5f7fb;margin:0}.topbar{position:sticky;top:0;display:flex;justify-content:space-between;padding:12px;background:white;box-shadow:0 2px 8px #ddd}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:12px}.card{background:white;border-radius:10px;padding:12px;box-shadow:0 2px 10px #ddd;max-height:420px;overflow:auto}
+:root{--bg:#f3f6fb;--card:#fff;--line:#d7dfeb;--txt:#1f2a44;--muted:#62708a;--brand:#1f4e8c;}
+*{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);margin:0;color:var(--txt)}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 20px;background:linear-gradient(90deg,#163a66,#245a9a);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.topbar nav{display:flex;gap:14px}.topbar nav a{color:#dce9ff;text-decoration:none;padding:8px 12px;border-radius:8px}.topbar nav a:hover{background:rgba(255,255,255,.12);color:#fff}
+main{padding:16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 10px rgba(21,42,79,.08)}
+.card-header{padding:12px 14px;border-bottom:1px solid #e8edf5}.card-header h3{margin:0;font-size:16px}.card-body{padding:14px}
+.filter-card .filter-row{display:flex;gap:10px;align-items:center}.multi-select-placeholder{flex:1;padding:10px;border:1px dashed #9fb2d1;border-radius:8px;background:#f8fbff;color:var(--muted)}
+#btn-query{background:var(--brand);border:0;color:#fff;padding:10px 16px;border-radius:8px;cursor:pointer}
+.summary-card{min-height:260px}.table-scroll{max-height:340px;overflow:auto}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ecf0f6;padding:8px;font-size:13px}
+.alert{margin:8px 0 14px;padding:12px 14px;border-radius:10px}.alert.warning{background:#fff7e6;border:1px solid #f3cf82;color:#7d5a00}
+.error-state{margin-top:10px;color:#b42318;font-weight:600}.empty-state{color:#7a8499;background:#f6f8fc;border-radius:8px;padding:10px}
