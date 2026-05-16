@@ -7,3 +7,6 @@ python manage.py makemigrations --check --dry-run
 python -m compileall .
 python manage.py runserver 127.0.0.1:8000
 
+
+cd <프로젝트_루트>
+Select-String -Path ".\**\*.py", ".\**\*.html", ".\**\*.js" -Pattern "rawdata"
