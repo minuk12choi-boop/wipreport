@@ -1,3 +1,7 @@
+import bigdataquery as _bdq
+from bigdataquery import getData as _get_data
+
+move = """ 
 with
 h as (
 SELECT 
@@ -36,3 +40,10 @@ WHERE R=M
 select 일보date, lot_id, lot_type, sum(move) as move
 from h
 group by 일보date, lot_id, lot_type
+"""
+
+        df_move = getData(
+                            param = move,
+                            convert_type = True,
+                            verbose = True
+                            )
