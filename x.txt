@@ -13,8 +13,8 @@ Name: count, dtype: int64
 [tip 필터] 필터 후 tip rows: 560
 [tip 필터] 제거 rows: 2244620
 [tip 필터 검증] tip_filtered eqpid는 모두 mcpath.eqp_id 후보에 포함됩니다.    
-[tip 필터] 필터 소요시간: 3.2초
-[시간] tip 필터: 3.2초
+[tip 필터] 필터 소요시간: 3.3초
+[시간] tip 필터: 3.3초
 [키 분포 점검] exact tip 조인 키(필터 후, 챔버 포함): keys=['process', 'step', 'eqpid', 'ppid', 'tip_eqpcham', 'tip_chamberid'], duplicated_rows=14, duplicated_groups=2
 Series([], Name: count, dtype: int64)
 [축약 점검] exact tip 축약 전 rows(필터 후): 556
@@ -32,7 +32,7 @@ Series([], Name: count, dtype: int64)
 [hold 집계 점검] hold raw rows: 46764
 [hold 집계 점검] category 적용 rows: 46764
 [hold 집계 점검] grouped lot_id+step_seq+category rows: 46055
-[시간] hold 집계/merge: 24.6초
+[시간] hold 집계/merge: 24.9초
 [hold 집계 점검] 최종 hold_summary rows: 41632
 [hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: 0
 [hold flag 점검] source keys: 41632, result keys: 41632
