@@ -55,6 +55,12 @@ REQUIRED_COLUMNS = {
 ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "utf-8"]
 SEP_CANDIDATES = [",", "\t", "|", ";"]
 KEEP_STATUS_REASON = True
+MYSQL_HOST = "12.81.64.130"
+MYSQL_USER = "minuk12.choi"
+MYSQL_PASSWORD = ""
+MYSQL_PORT = 3306
+MYSQL_DB = "app_db"
+MYSQL_CHARSET = "utf8mb4"
 
 MOVE_SQL = """
 SELECT 
@@ -111,6 +117,33 @@ def quote_mysql_identifier(name: str) -> str:
     return f"`{safe_name}`"
 
 
+def get_mysql_connection():
+    if pymysql is None:
+        print("오류:")
+        print("pymysql이 설치되어 있지 않습니다.")
+        print("아래 명령으로 설치 후 재실행하세요.")
+        print("python -m pip install pymysql")
+        raise RuntimeError("pymysql 미설치")
+    print(f"[DB 접속] host: {MYSQL_HOST}")
+    print(f"[DB 접속] user: {MYSQL_USER}")
+    print(f"[DB 접속] db: {MYSQL_DB}")
+    print(f"[DB 접속] password 설정 여부: {bool(MYSQL_PASSWORD)}")
+    try:
+        return pymysql.connect(
+            host=MYSQL_HOST,
+            user=MYSQL_USER,
+            passwd=MYSQL_PASSWORD,
+            port=MYSQL_PORT,
+            db=MYSQL_DB,
+            charset=MYSQL_CHARSET,
+        )
+    except Exception as exc:
+        if "1045" in str(exc) and "Access denied" in str(exc) and not MYSQL_PASSWORD:
+            print("[DB 접속 오류] MySQL 비밀번호가 설정되지 않았습니다.")
+            print("create_wip_table.py 상단의 MYSQL_PASSWORD 값을 입력한 뒤 재실행하세요.")
+        raise
+
+
 def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_lotpath") -> None:
     if pymysql is None:
         print("오류:")
@@ -127,14 +160,7 @@ def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_l
     cursor = None
     stage = "connect"
     try:
-        conn = pymysql.connect(
-            host="12.81.64.130",
-            user="minuk12.choi",
-            passwd="",
-            port=3306,
-            db="app_db",
-            charset="utf8mb4",
-        )
+        conn = get_mysql_connection()
         cursor = conn.cursor()
 
         stage = "drop_table"
@@ -233,7 +259,7 @@ def dataframe_to_mysql_upsert_wip_move(df_move: pd.DataFrame) -> None:
     cursor = None
     stage = "connect"
     try:
-        conn = pymysql.connect(host="12.81.64.130", user="minuk12.choi", passwd="", port=3306, db="app_db", charset="utf8mb4")
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         stage = "create_table"
         cursor.execute("""CREATE TABLE IF NOT EXISTS `wip_move` (
@@ -302,7 +328,7 @@ def dataframe_to_mysql_upsert_wip_move_group(df_group: pd.DataFrame) -> None:
     cursor = None
     stage = "connect"
     try:
-        conn = pymysql.connect(host="12.81.64.130", user="minuk12.choi", passwd="", port=3306, db="app_db", charset="utf8mb4")
+        conn = get_mysql_connection()
         cursor = conn.cursor()
         stage = "create_table"
         cursor.execute("""CREATE TABLE IF NOT EXISTS `wip_move_group` (
