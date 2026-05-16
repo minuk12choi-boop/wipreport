@@ -95,22 +95,23 @@ def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_l
         )
         cursor = conn.cursor()
 
-        stage = "create_table"
+        stage = "drop_table"
         quoted_table = quote_mysql_identifier(table_name)
+        drop_sql = f"DROP TABLE IF EXISTS {quoted_table}"
+        cursor.execute(drop_sql)
+        print("[DB 적재] DROP TABLE 완료")
+
+        stage = "create_table"
         col_defs = ",\n    ".join(
             f"{quote_mysql_identifier(col)} TEXT NULL" for col in df.columns
         )
         create_sql = (
-            f"CREATE TABLE IF NOT EXISTS {quoted_table} (\n"
+            f"CREATE TABLE {quoted_table} (\n"
             f"    {col_defs}\n"
             ") CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
         )
         cursor.execute(create_sql)
-        print("[DB 적재] 테이블 생성 확인 완료")
-
-        stage = "truncate"
-        cursor.execute(f"TRUNCATE TABLE {quoted_table}")
-        print("[DB 적재] 기존 데이터 삭제 완료")
+        print("[DB 적재] 테이블 생성 완료")
 
         stage = "prepare_insert"
         cols_sql = ", ".join(quote_mysql_identifier(c) for c in df.columns)
@@ -144,6 +145,16 @@ def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_l
         if conn is not None:
             conn.close()
         print("[DB 적재] 연결 종료")
+
+
+def add_load_metadata(df: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
+    now = pd.Timestamp.now()
+    loaded_at = now.strftime("%Y-%m-%d %H:%M:%S")
+    loaded_id = now.strftime("%Y%m%d%H%M%S")
+    out = df.copy()
+    out["loaded_at"] = loaded_at
+    out["loaded_id"] = loaded_id
+    return out, loaded_at, loaded_id
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -1529,7 +1540,23 @@ def main() -> None:
         wip_concat.to_excel(writer, index=False)
     print(f"[concat 저장 완료] 경로: {output_concat_path}")
     print("[concat 저장 완료] output_wip_concat.xlsx 저장이 완료되었습니다. 이후 DB 적재를 수행합니다.")
-    dataframe_to_mysql_replace(wip_concat, "wip_report_lotpath")
+    db_df, loaded_at, loaded_id = add_load_metadata(wip_concat)
+    print(f"[DB 적재] loaded_at: {loaded_at}")
+    print(f"[DB 적재] loaded_id: {loaded_id}")
+    print(f"[DB 적재] DB 적재용 columns: {len(db_df.columns)}")
+
+    if "loaded_at" not in db_df.columns:
+        raise WipBuildError("DB 적재 검증 실패: loaded_at 컬럼이 없습니다.")
+    if "loaded_id" not in db_df.columns:
+        raise WipBuildError("DB 적재 검증 실패: loaded_id 컬럼이 없습니다.")
+    if db_df["loaded_at"].nunique(dropna=False) != 1:
+        raise WipBuildError("DB 적재 검증 실패: loaded_at 값이 실행 내에서 단일값이 아닙니다.")
+    if db_df["loaded_id"].nunique(dropna=False) != 1:
+        raise WipBuildError("DB 적재 검증 실패: loaded_id 값이 실행 내에서 단일값이 아닙니다.")
+    if is_blank(db_df["loaded_id"].iloc[0] if len(db_df) > 0 else loaded_id):
+        raise WipBuildError("DB 적재 검증 실패: loaded_id가 비어 있습니다.")
+
+    dataframe_to_mysql_replace(db_df, "wip_report_lotpath")
 
     print("[입력 파일 요약]")
     for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("tip", tip_meta), ("mclot", mclot_meta), ("steppath", steppath_meta)]:
