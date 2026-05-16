@@ -1,0 +1,659 @@
+{% extends "facts/base.html" %}
+{% load static %}
+{% block content %}
+<form method="get" id="dashboardFilterForm">
+    <input type="hidden" name="include_measure" value="0">
+    <input type="hidden" name="include_emergency" value="0">
+    <input type="hidden" name="exclude_skiprule_100" value="0">
+    <input type="hidden" name="tip_mode" value="0">
+
+    <div class="dashboard-grid" id="dashboardTopSections">
+        <section class="card dashboard-left-panel">
+            <div class="dashboard-top-row">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <h3 class="panel-title" style="margin:0;">대시보드 필터</h3>
+                    <span style="font-size:12px; color:#486888;">PRP 선택 후 조회 버튼 클릭바랍니다.</span>
+                </div>
+                <div class="toolbar-inline">
+                    <button type="button" class="btn-primary" id="dashboardSearchBtn">조회</button>
+                </div>
+            </div>
+
+            <div class="filter-grid dashboard-filter-grid">
+                <div>
+                    <label>기준일</label>
+                    <input type="date" name="snap_date" value="{{ snap_date|date:'Y-m-d' }}">
+                </div>
+                <div>
+                    <label>LINE</label>
+                    <select name="lineid">
+                        <option value="">전체</option>
+                        {% for li in filters.lineids %}
+                            <option value="{{ li }}" {% if selected_lineid == li %}selected{% endif %}>{{ li }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>PRP</label>
+                    <select name="processid" id="dashboardProcessSelect" class="dashboard-searchable-select" data-placeholder="PRP 검색 또는 선택">
+                        <option value="">전체</option>
+                        {% for p in filters.processes %}
+                            <option value="{{ p }}" {% if selected_processid == p %}selected{% endif %}>{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>AREA</label>
+                    <select name="areaname">
+                        <option value="">전체</option>
+                        {% for a in filters.areas %}
+                            <option value="{{ a }}" {% if selected_areaname == a %}selected{% endif %}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>LAYER</label>
+            <select name="layerid" id="dashboardLayerSelect" multiple class="facts-hidden-native-select" data-multi-dropdown="dashboard-layer" data-summary-label="Layer">
+                        {% for l in filters.layers %}
+                            <option value="{{ l }}" {% if l in selected_layerids %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="dashboard-check-group">
+                <label class="inline-check-label">
+                    계측포함:
+                    <input type="checkbox" name="include_measure" value="1" {% if include_measure %}checked{% endif %}>
+                </label>
+                <label class="inline-check-label">
+                    비상시 포함:
+                    <input type="checkbox" name="include_emergency" value="1" {% if include_emergency %}checked{% endif %}>
+                </label>
+                <label class="inline-check-label">
+                    SKIPRULE 100 제외:
+                    <input type="checkbox" name="exclude_skiprule_100" value="1" {% if exclude_skiprule_100 %}checked{% endif %}>
+                </label>
+                <label class="inline-check-label">
+                    TIP 고려:
+                    <input type="checkbox" name="tip_mode" value="1" {% if tip_mode %}checked{% endif %}>
+                </label>
+            </div>
+
+            <div class="summary-grid dashboard-summary-grid">
+                <div class="summary-card">
+                    <div class="summary-label">호환율</div>
+                    <div class="summary-value" id="summaryCompatRate">{% if pre_query_state %}PRP 선택 필요{% elif summary.compat_rate is not None %}{{ summary.compat_rate|floatformat:1 }}%{% else %}-{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">전체 STEP</div>
+                    <div class="summary-value" id="summaryTotalSteps">{% if pre_query_state %}-{% else %}{{ summary.total_steps|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">단독</div>
+                    <div class="summary-value" id="summarySingleCnt">{% if pre_query_state %}-{% else %}{{ summary.single_cnt|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">BODY호환</div>
+                    <div class="summary-value" id="summaryBodyCnt">{% if pre_query_state %}-{% else %}{{ summary.body_cnt|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">CHAM호환</div>
+                    <div class="summary-value" id="summaryChamCnt">{% if pre_query_state %}-{% else %}{{ summary.cham_cnt|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">미등록</div>
+                    <div class="summary-value" id="summaryUnregisteredCnt">{% if pre_query_state %}-{% else %}{{ summary.unregistered_cnt|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">가능path없음</div>
+                    <div class="summary-value" id="summaryNoPathCnt">{% if pre_query_state %}-{% else %}{{ summary.no_path_cnt|default:"-" }}{% endif %}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">월 목표</div>
+                    <div class="summary-value" id="summaryTargetMonthly">
+                        {% if not pre_query_state and target_monthly is not None %}
+                            {{ target_monthly|floatformat:1 }}%
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card dashboard-right-panel">
+            <div class="card-header-row">
+                <h3>호환율 그래프</h3>
+                <button type="button" class="info-icon-btn" id="calcInfoBtn" title="사용 가이드">?</button>
+            </div>
+            <div class="chart-wrap dashboard-chart-wrap" id="compatChartWrapper">
+                <canvas id="factsMainChart"></canvas>
+                <div id="chartEmptyMessage" class="chart-empty-message {% if pre_query_state %}pre-query{% else %}no-data hidden{% endif %}">
+                    <div class="chart-empty-title">{% if pre_query_state %}PRP 선택 후 조회 바랍니다.{% else %}조회 조건에 해당하는 그래프 데이터가 없습니다.{% endif %}</div>
+                    <div class="chart-empty-subtitle">{% if pre_query_state %}LINE과 PRP를 선택한 뒤 조회 버튼을 눌러주세요.{% else %}선택한 조건을 확인한 뒤 다시 조회해 주세요.{% endif %}</div>
+                </div>
+            </div>
+        </section>
+    </div>
+</form>
+
+<section class="card prp-box-card">
+    <div class="card-header-row prp-box-header">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">PRP TABLE</h3>
+            <span style="font-size:13px; color:#486888;">PRP 조건과 그 외 한개 이상의 필터 조건을 설정 후 조회바랍니다.</span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="dashboardTopToggleBtn">대시보드 영역 숨기기</button>
+            <button type="button" class="btn-primary btn-sm" id="tblFilterSearchBtn">조회</button>
+            <button type="button" class="btn-secondary btn-sm" id="prpExcelDownloadBtn">필터조건 다운로드</button>
+            <button type="button" class="btn-secondary btn-sm" id="prpExcelDownloadAllBtn">전체 다운로드</button>
+            <button type="button" class="btn-secondary btn-sm" id="prpExcelDownloadSelectedBtn">복수 PRP 다운로드</button>
+            <button type="button" class="btn-secondary btn-sm" id="openUploadModalBtn">엑셀 업로드</button>
+            <button type="button" class="btn-secondary btn-sm" id="prpScrollTopBtn">맨위로</button>
+            <button type="button" class="btn-secondary btn-sm" id="prpScrollBottomBtn">맨아래로</button>
+        </div>
+    </div>
+
+    <div class="prp-box-filter-grid">
+        <div>
+            <label>기준일</label>
+            <input type="date" id="tblFilterSnapDate" value="{{ snap_date|date:'Y-m-d' }}">
+        </div>
+        <div>
+            <label>LINE</label>
+            <select id="tblFilterLine">
+                <option value="">전체</option>
+                {% for line in table_line_options %}
+                    <option value="{{ line }}">{{ line }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>PRP</label>
+            <select id="tblFilterPrp" class="dashboard-searchable-select" data-placeholder="PRP 검색 또는 선택">
+                <option value="">전체</option>
+                {% for p in table_prp_options %}
+                    <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>AREA</label>
+            <select id="tblFilterArea">
+                <option value="">전체</option>
+                {% for a in table_area_options %}
+                    <option value="{{ a }}">{{ a }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>LAYER</label>
+            <select id="tblFilterLayer" multiple class="facts-hidden-native-select" data-multi-dropdown="prp-table-layer" data-summary-label="Layer">
+                {% for l in table_layer_options %}
+                <option value="{{ l }}">{{ l }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>STEP</label>
+            <select id="tblFilterStep" class="dashboard-searchable-select" data-placeholder="STEP 검색 또는 선택">
+                <option value="">전체</option>
+                {% for s in table_step_options %}
+                    <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>DESCRIPT</label>
+            <input type="text" id="tblFilterDescript" placeholder="DESCRIPT 일부 입력">
+        </div>
+        <div>
+            <label>RECIPE</label>
+            <input type="text" id="tblFilterRecipe" placeholder="RECIPE 일부 입력">
+        </div>
+        <div>
+            <label>TYPE</label>
+            <select id="tblFilterType">
+                <option value="">전체</option>
+                {% for t in table_type_options %}
+                    <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>BODY호환</label>
+            <select id="tblFilterBodyFlag">
+                <option value="">전체</option>
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+            </select>
+        </div>
+        <div>
+            <label>CHAM호환</label>
+            <select id="tblFilterChamFlag">
+                <option value="">전체</option>
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+            </select>
+        </div>
+        <div>
+            <label>호환구분</label>
+            <select id="tblFilterCompatType">
+                <option value="">전체</option>
+                <option value="미등록">미등록</option>
+                <option value="가능path없음">가능path없음</option>
+                <option value="단독">단독</option>
+                <option value="cham호환">cham호환</option>
+                <option value="body호환">body호환</option>
+            </select>
+        </div>
+        <div>
+            <label>상시</label>
+            <select id="tblFilterAlways">
+                <option value="">전체</option>
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+            </select>
+        </div>
+        <div>
+            <label>주요</label>
+            <select id="tblFilterMajor">
+                <option value="">전체</option>
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+            </select>
+        </div>
+        <div>
+            <label>계획</label>
+            <select id="tblFilterPlan">
+                <option value="">전체</option>
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-wrap prp-dashboard-table-wrap" id="prpTableWrap">
+        <table class="facts-table facts-cell-table" id="prpCellTable">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="prpCheckAll" class="row-check"></th>
+                    <th>LINE</th>
+                    <th>PRP</th>
+                    <th>AREA</th>
+                    <th>LAYER</th>
+                    <th>STEP</th>
+                    <th>SKIPRULE</th>
+                    <th>DESCRIPT</th>
+                    <th>RECIPE</th>
+                    <th><span class="th-help" data-tooltip="TIP등록 기준 / 빨간색 글자는 미등록TIP호환Path입니다.">EQPGROUP</span></th>
+                    <th><span class="th-help" data-tooltip="TIP등록 기준 / 빨간색 글자는 미등록TIP호환Path입니다.">CHAM정보</span></th>
+                    <th>TYPE</th>
+                    <th>BODY호환</th>
+                    <th>CHAM호환</th>
+                    <th>BODY수</th>
+                    <th>CHAM수</th>
+                    <th>호환구분</th>
+                    <th>호환확보</th>
+                    <th><span class="th-help" data-tooltip="상시 호환Path, 비상시 호환Path 선택">상시/비상시</span></th>
+                    <th><span class="th-help" data-tooltip="주요Lot도 호환 가능, 비주요Lot만 호환 가능 선택">주요/비주요</span></th>
+                    <th>호환계획</th>
+                    <th>계획_호환EQPBODY명</th>
+                    <th>계획_호환EQPCHAM명</th>
+                    <th>계획_호환완료계획일</th>
+                    <th>계획_평가LotID</th>
+                    <th>계획_평가단계</th>
+                    <th>계획_비고</th>
+                    <th><span class="th-help" data-tooltip="GPM에 TIP은 등록돼있지 않지만, 실제로 호환 가능한 Path">TIP미등록 호환Path</span></th>
+                    <th>미등록TIP호환Path_상시/비상시</th>
+                    <th>미등록TIP호환Path_주요/비주요</th>
+                    <th>미등록TIP호환Path_호환EQPBODY명</th>
+                    <th>미등록TIP호환Path_호환EQPCHAM명</th>
+                    <th><span class="th-help" data-tooltip="TIP 고려 기준 호환구분">호환구분_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="TIP 고려 기준 호환확보(Y/N)">호환확보_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="TIP등록은 되어있으나, {{ current_prevent_threshold_days }}일 이상 PREVENT 상태이면 비호환으로 간주">BODY호환_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="TIP등록은 되어있으나, {{ current_prevent_threshold_days }}일 이상 PREVENT 상태이면 비호환으로 간주">CHAM호환_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="TIP등록은 되어있으나, {{ current_prevent_threshold_days }}일 이상 PREVENT 상태이면 비호환으로 간주">BODY호환확보수_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="TIP등록은 되어있으나, {{ current_prevent_threshold_days }}일 이상 PREVENT 상태이면 비호환으로 간주">CHAM호환확보수_TIP고려</span></th>
+                    <th><span class="th-help" data-tooltip="현재 PREVENT 상태 TIP List">TIP</span></th>
+                    <th><span class="th-help" data-tooltip="Serial설비 Chamber 연결 정보">CHILDEQP</span></th>
+                </tr>
+            </thead>
+            <tbody id="prpDashboardTbody">
+                <tr>
+                    <td colspan="40" class="empty-cell">PRP 조건과 하나 이상의 필터 조건을 설정한 뒤 조회하세요.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div id="guideModal" class="modal hidden">
+    <div class="modal-panel guide-modal-panel">
+        <div class="guide-modal-header">
+            <div class="modal-title">FACTS 사용 가이드</div>
+            <div class="toolbar-inline">
+                <button type="button" class="btn-secondary btn-sm" id="guidePrevBtn">이전</button>
+                <span id="guidePageInfo" class="guide-page-info">0 / 0</span>
+                <button type="button" class="btn-secondary btn-sm" id="guideNextBtn">다음</button>
+                <button type="button" class="btn-primary btn-sm" id="guideCloseBtn">닫기</button>
+            </div>
+        </div>
+        <div class="modal-body guide-modal-body" id="guideModalBody">
+            <div id="guideEmptyMessage" class="empty-cell">등록된 사용 가이드가 없습니다.</div>
+            <img id="guideImageViewer" class="guide-image-viewer hidden" alt="FACTS guide page">
+        </div>
+    </div>
+</div>
+
+<div id="overrideModal" class="modal hidden">
+    <div class="modal-panel">
+        <div class="modal-title" id="overrideModalTitle">값 선택</div>
+        <div class="modal-body">
+            <input type="hidden" id="overrideFieldType">
+            <div id="overrideMemberList" class="override-member-list">
+                <div class="empty-cell">불러오는 중...</div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="overrideCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="overrideSaveBtn">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="planListModal" class="modal hidden">
+    <div class="modal-panel plan-list-modal-panel">
+        <div class="modal-title">호환계획 목록</div>
+        <div class="modal-body">
+            <div class="toolbar-inline" style="margin-bottom:12px;">
+                <button type="button" class="btn-primary btn-sm" id="planAddNewBtn">신규 입력</button>
+                <button type="button" class="btn-secondary btn-sm" id="openSimilarEqpBtn">동종모델 EQP 리스트 확인</button>
+            </div>
+            <div class="table-wrap plan-list-table-wrap">
+                <table class="facts-table compact-facts-table" id="planListTable">
+                    <thead>
+                        <tr>
+                            <th>상시/비상시</th>
+                            <th>주요/비주요</th>
+                            <th>계획_호환EQPBODY명</th>
+                            <th>계획_호환EQPCHAM명</th>
+                            <th>계획_호환완료계획일</th>
+                            <th>계획_평가LotID</th>
+                            <th>계획_평가단계</th>
+                            <th>계획_비고</th>
+                            <th>수정</th>
+                            <th>삭제</th>
+                        </tr>
+                    </thead>
+                    <tbody id="planListTbody">
+                        <tr><td colspan="10" class="empty-cell">불러오는 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="planListCloseBtn">닫기</button>
+        </div>
+    </div>
+</div>
+
+<div id="similarEqpModal" class="modal hidden">
+    <div class="modal-panel plan-list-modal-panel">
+        <div class="modal-title">동종모델 EQP 리스트</div>
+        <div class="modal-body">
+            <div style="margin-bottom:10px; font-size:13px; color:#d32f2f; font-weight:700;" id="similarEqpNotice">
+                해당 추천은 GPM 등록된 EQP_MODEL을 기준으로 합니다.
+            </div>
+            <div style="margin-bottom:10px; font-size:12px; color:#486888;" id="similarEqpBaseInfo"></div>
+            <div class="table-wrap plan-list-table-wrap">
+                <table class="facts-table compact-facts-table" id="similarEqpTable">
+                    <thead>
+                        <tr>
+                            <th>EQP_ID</th>
+                            <th>위치</th>
+                            <th>EQP_MODEL</th>
+                            <th>매칭기준</th>
+                            <th>유사도</th>
+                            <th>기준모델</th>
+                        </tr>
+                    </thead>
+                    <tbody id="similarEqpTbody">
+                        <tr><td colspan="6" class="empty-cell">불러오는 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="similarEqpCloseBtn">닫기</button>
+        </div>
+    </div>
+</div>
+
+<div id="planEditModal" class="modal hidden">
+    <div class="modal-panel plan-edit-modal-panel">
+        <div class="modal-title">호환 계획 입력</div>
+        <div class="modal-body">
+            <input type="hidden" id="planEditId">
+            <div class="filter-grid plan-edit-grid">
+                <div>
+                    <label>상시/비상시</label>
+                    <select id="planAlwaysEmergency">
+                        <option value="">선택</option>
+                        <option value="상시">상시</option>
+                        <option value="비상시">비상시</option>
+                    </select>
+                </div>
+                <div>
+                    <label>주요/비주요</label>
+                    <select id="planMajorMinor">
+                        <option value="">선택</option>
+                        <option value="주요">주요</option>
+                        <option value="비주요">비주요</option>
+                    </select>
+                </div>
+                <div>
+                    <label>호환EQPBODY명 (필수기재)</label>
+                    <input type="text" id="planEqpBodyName">
+                </div>
+                <div>
+                    <label>호환EQPCHAM명</label>
+                    <input type="text" id="planEqpChamName">
+                </div>
+                <div>
+                    <label>호환완료계획일</label>
+                    <input type="date" id="planDueDate">
+                </div>
+                <div>
+                    <label>평가LotID</label>
+                    <input type="text" id="planEvalLotId">
+                </div>
+                <div>
+                    <label>평가단계</label>
+                    <select id="planEvalStage">
+                        <option value="">선택</option>
+                        {% for s in eval_stages %}
+                            <option value="{{ s.id }}">{{ s.stage_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>비고</label>
+                    <input type="text" id="planMemo">
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="planCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="planSaveBtn">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="tipMissingListModal" class="modal hidden">
+    <div class="modal-panel">
+        <div class="modal-title">TIP미등록 호환Path 목록</div>
+        <div class="modal-body">
+            <div class="toolbar-inline" style="margin-bottom:12px;">
+                <button type="button" class="btn-primary btn-sm" id="tipMissingAddNewBtn">신규 입력</button>
+            </div>
+            <div class="table-wrap" style="max-height:280px; overflow:auto; border:1px solid #dce8f5; border-radius:12px;">
+                <table class="facts-table compact-facts-table" id="tipMissingListTable" style="min-width:900px;">
+                    <thead>
+                        <tr>
+                            <th>미등록TIP호환Path_상시/비상시</th>
+                            <th>미등록TIP호환Path_주요/비주요</th>
+                            <th>미등록TIP호환Path_호환EQPBODY명</th>
+                            <th>미등록TIP호환Path_호환EQPCHAM명</th>
+                            <th>수정</th>
+                            <th>삭제</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tipMissingListTbody">
+                        <tr><td colspan="6" class="empty-cell">불러오는 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="tipMissingListCloseBtn">닫기</button>
+        </div>
+    </div>
+</div>
+
+<div id="tipMissingEditModal" class="modal hidden">
+    <div class="modal-panel">
+        <div class="modal-title">TIP미등록 호환Path 입력</div>
+        <div class="modal-body">
+            <input type="hidden" id="tipMissingEditId">
+            <div class="filter-grid">
+                <div>
+                    <label>상시/비상시 (필수기재)</label>
+                    <select id="tipMissingAlwaysEmergency">
+                        <option value="">선택</option>
+                        <option value="상시">상시</option>
+                        <option value="비상시">비상시</option>
+                    </select>
+                </div>
+                <div>
+                    <label>주요/비주요 (필수기재)</label>
+                    <select id="tipMissingMajorMinor">
+                        <option value="">선택</option>
+                        <option value="주요">주요</option>
+                        <option value="비주요">비주요</option>
+                    </select>
+                </div>
+                <div>
+                    <label>호환EQPBODY명 (필수기재)</label>
+                    <input type="text" id="tipMissingEqpBodyName">
+                </div>
+                <div>
+                    <label>호환EQPCHAM명</label>
+                    <input type="text" id="tipMissingEqpChamName">
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="tipMissingCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="tipMissingSaveBtn">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="multiPrpDownloadModal" class="modal hidden">
+    <div class="modal-panel">
+        <div class="modal-title">복수 PRP 다운로드</div>
+        <div class="modal-body">
+            <div class="filter-grid plan-edit-grid">
+                <div>
+                    <label>기준일</label>
+                    <input type="date" id="multiDownloadSnapDate">
+                </div>
+                <div>
+                    <label>LINE</label>
+                    <select id="multiDownloadLine">
+                        <option value="">선택</option>
+                    </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label>PRP 복수 선택</label>
+                    <input type="text" id="multiDownloadPrpSearch" placeholder="PRP 검색 (예: SD)">
+                    <div id="multiDownloadPrpCount" style="margin-top:6px; font-size:12px; color:#486888;">0개 PRP 선택</div>
+                    <div id="multiDownloadPrpGuide" style="margin-top:4px; font-size:12px; color:#5a7694;">최대 20개까지 선택 가능합니다.</div>
+                    <div id="multi-download-prp-dropdown" class="multi-download-prp-list"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="multiDownloadCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="multiDownloadRunBtn">다운로드</button>
+        </div>
+    </div>
+</div>
+
+<div id="uploadModal" class="modal hidden">
+    <div class="modal-panel">
+        <div class="upload-modal-title-row">
+            <div class="modal-title">엑셀 업로드</div>
+            <a href="{% url 'facts:dashboard_upload_template' %}" class="info-icon-btn inline-help-btn" title="업로드 양식 다운로드">?</a>
+        </div>
+        <div class="modal-body">
+            <p class="upload-guide">
+                PROCESSID, STEPSEQ,
+                상시/비상시, 주요/비주요, 호환EQPBODY명, 호환EQPCHAM명, 호환완료계획일, 평가LotID, 평가단계, 비고,
+                미등록TIP호환Path_상시/비상시, 미등록TIP호환Path_주요/비주요, 미등록TIP호환Path_호환EQPBODY명, 미등록TIP호환Path_호환EQPCHAM명
+            </p>
+            <input type="file" id="bulkUploadFile" accept=".xlsx,.csv">
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="uploadCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="uploadSaveBtn">업로드</button>
+        </div>
+    </div>
+</div>
+
+<div id="factsMessageModal" class="modal hidden">
+    <div class="modal-panel modal-sm">
+        <div class="modal-title" id="factsMessageTitle">FACTS의 메시지</div>
+        <div class="modal-body" id="factsMessageBody"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-primary" id="factsMessageOkBtn">확인</button>
+        </div>
+    </div>
+</div>
+
+<div id="factsConfirmModal" class="modal hidden">
+    <div class="modal-panel modal-sm">
+        <div class="modal-title" id="factsConfirmTitle">FACTS의 메시지</div>
+        <div class="modal-body" id="factsConfirmBody"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="factsConfirmCancelBtn">취소</button>
+            <button type="button" class="btn-primary" id="factsConfirmOkBtn">확인</button>
+        </div>
+    </div>
+</div>
+
+{{ combined_series_json|json_script:"facts-combined-series-data" }}
+{{ dashboard_api_urls_json|json_script:"dashboard-api-urls" }}
+{{ guide_pages_json|json_script:"guide-pages-data" }}
+<script id="dashboard-meta" type="application/json">
+{
+    "snap_date": "{{ snap_date|date:'Y-m-d' }}",
+    "is_editable_snap_date": {{ is_editable_snap_date|yesno:"true,false" }}
+}
+</script>
+{% endblock %}
+
+{% block script %}
+<script src="{% static 'facts/js/dashboard.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/state.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/api.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/filters.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/chart.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/prp_table.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/modals.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/bulk_upload.js' %}"></script>
+<script src="{% static 'facts/js/dashboard/init.js' %}"></script>
+{% endblock %}
