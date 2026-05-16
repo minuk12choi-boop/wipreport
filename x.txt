@@ -10,4 +10,468 @@ Summary
 제품구분자 저장모듈 저장HOLD유형 저장초HOT 저장
 
 
-문제점: 
+문제점: 다 문제.. 된게 없음
+
+<http://127.0.0.1:8031/wip/summary/의 텍스트만 복붙한 것>
+재공 Report
+Summary
+기준정보
+문의: minuk12.choi
+필터
+Lot Type 다중 선택 (준비 중)
+조회
+① 요약
+② Lot Balance
+③ 지수
+④ 초HOT
+초HOT 기준정보 기반 상태 영역 - 준비 중
+⑤ 이슈 정리
+⑥ 재공정보
+
+문제점: 내가 원한 화면 비율대로 전혀 나오지 않고 있음. db연결 안된듯, 아무것도 안뜸
+
+그리고 상단 top에 wip_report_lotpath의 최신 loaded_at 시각이 떠야하는 그게 없음.
+재공report와 문의: minuk12.choi와 적재시각: 최신loaded_at 시각 뜨는 것은 화면의 맨위고
+그아래에 별도 박스로 top menu bar가 있으며 메뉴는 좌측정렬이 돼야하는데, 현재는 top menu bar안에 저게 다 있고, menu는 뜬금없이 가운데 정렬돼있음
+
+
+
+<터미널 로그>
+PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py check
+System check identified no issues (0 silenced).
+PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py makemigrations --check
+ --dry-run
+Migrations for 'wipreport':
+  wipreport\migrations\0002_wipmove_wipmovegroup_wipreportlotpath.py
+    + Create model WipMove
+    + Create model WipMoveGroup
+    + Create model WipReportLotPath
+PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py migrate
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions, wipreport        
+Running migrations:
+  Applying wipreport.0001_initial... OK
+PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python -m compileall .
+Listing '.'...
+Listing '.\\config'...
+Compiling '.\\manage.py'...
+Listing '.\\rawdata'...
+Listing '.\\wipreport'...
+Listing '.\\wipreport\\migrations'...
+Listing '.\\wipreport\\static'...
+Listing '.\\wipreport\\static\\wipreport'...
+Listing '.\\wipreport\\static\\wipreport\\css'...
+Listing '.\\wipreport\\static\\wipreport\\js'...
+Listing '.\\wipreport\\templates'...
+Listing '.\\wipreport\\templates\\wipreport'...
+Listing '.\\wipreport\\templates\\wipreport\\partials'...
+PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py runserver 127.0.0.1:8031
+Watching for file changes with StatReloader
+Performing system checks...
+
+System check identified no issues (0 silenced).
+May 16, 2026 - 14:52:17
+Django version 5.2.11, using settings 'config.settings'
+Starting development server at http://127.0.0.1:8031/
+Quit the server with CTRL-BREAK.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+[16/May/2026 14:52:18] "GET / HTTP/1.1" 302 0
+[16/May/2026 14:52:18] "GET /wip/summary/ HTTP/1.1" 200 1926
+[16/May/2026 14:52:19] "GET /static/wipreport/css/wipreport.css HTTP/1.1" 200 1723
+[16/May/2026 14:52:19] "GET /static/wipreport/js/wipreport.js HTTP/1.1" 200 843
+Internal Server Error: /wip/api/summary-data/
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)   
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\views\decorators\http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\views.py", line 57, in summary_data
+    data = build_summary({'lot_type': request.GET.getlist('lot_type')})       
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\services.py", line 28, in build_summary
+    for o in qs[:2000]:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 386, in __iter__
+    self._fetch_all()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\sql\compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+django.db.utils.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+[16/May/2026 14:52:19] "GET /wip/api/summary-data/?lot_type=PP HTTP/1.1" 500 226870
+[16/May/2026 14:52:44] "GET /wip/ref/ HTTP/1.1" 200 908
+[16/May/2026 14:52:44] "GET /static/wipreport/css/wipreport.css HTTP/1.1" 304 0
+[16/May/2026 14:52:44] "GET /static/wipreport/js/wipreport_ref.js HTTP/1.1" 200 561
+[16/May/2026 15:00:13] "GET /wip/summary/ HTTP/1.1" 200 1926
+[16/May/2026 15:00:13] "GET /static/wipreport/css/wipreport.css HTTP/1.1" 304 0
+[16/May/2026 15:00:13] "GET /static/wipreport/js/wipreport.js HTTP/1.1" 304 0 
+Internal Server Error: /wip/api/summary-data/
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)   
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\views\decorators\http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\views.py", line 57, in summary_data
+    data = build_summary({'lot_type': request.GET.getlist('lot_type')})       
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\services.py", line 28, in build_summary
+    for o in qs[:2000]:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 386, in __iter__
+    self._fetch_all()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\sql\compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+django.db.utils.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+[16/May/2026 15:00:13] "GET /wip/api/summary-data/?lot_type=PP HTTP/1.1" 500 226870
+[16/May/2026 15:00:14] "GET /wip/ref/ HTTP/1.1" 200 908
+[16/May/2026 15:00:14] "GET /static/wipreport/js/wipreport_ref.js HTTP/1.1" 304 0
+[16/May/2026 15:00:15] "GET /wip/summary/ HTTP/1.1" 200 1926
+Internal Server Error: /wip/api/summary-data/
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)   
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\views\decorators\http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\views.py", line 57, in summary_data
+    data = build_summary({'lot_type': request.GET.getlist('lot_type')})       
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\services.py", line 28, in build_summary
+    for o in qs[:2000]:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 386, in __iter__
+    self._fetch_all()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\sql\compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+django.db.utils.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+[16/May/2026 15:00:15] "GET /wip/api/summary-data/?lot_type=PP HTTP/1.1" 500 226870
+Internal Server Error: /wip/api/summary-data/
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)   
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\views\decorators\http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\views.py", line 57, in summary_data
+    data = build_summary({'lot_type': request.GET.getlist('lot_type')})       
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\services.py", line 28, in build_summary
+    for o in qs[:2000]:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 386, in __iter__
+    self._fetch_all()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\sql\compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+django.db.utils.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+[16/May/2026 15:00:18] "GET /wip/api/summary-data/?lot_type=PP HTTP/1.1" 500 226870
+Internal Server Error: /wip/api/summary-data/
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)   
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\views\decorators\http.py", line 64, in inner
+    return func(request, *args, **kwargs)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\views.py", line 57, in summary_data
+    data = build_summary({'lot_type': request.GET.getlist('lot_type')})       
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\wipreport\services.py", line 28, in build_summary
+    for o in qs[:2000]:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 386, in __iter__
+    self._fetch_all()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 1954, in _fetch_all
+    self._result_cache = list(self._iterable_class(self))
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\query.py", line 93, in __iter__
+    results = compiler.execute_sql(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\models\sql\compiler.py", line 1623, in execute_sql
+    cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\django\db\backends\mysql\base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 575, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)      
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 826, in _read_query_result
+    result.read()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 1203, in read
+    first_packet = self.connection._read_packet()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 782, in _read_packet
+    packet.raise_for_error()
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+django.db.utils.OperationalError: (1054, "Unknown column 'wip_report_lotpath.id' in 'field list'")
+[16/May/2026 15:00:18] "GET /wip/api/summary-data/?lot_type=PP HTTP/1.1" 500 226870
