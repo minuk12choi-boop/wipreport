@@ -1,37 +1,5 @@
-PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py check
-System check identified no issues (0 silenced).
-PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py makemigrations --check
- --dry-run
-Migrations for 'wipreport':
-  wipreport\migrations\0002_wipmove_wipmovegroup_wipreportlotpath.py
-    + Create model WipMove
-    + Create model WipMoveGroup
-    + Create model WipReportLotPath
-PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python -m compileall .
-Listing '.'...
-Listing '.\\config'...
-Listing '.\\wipreport'...
-Listing '.\\wipreport\\migrations'...
-Listing '.\\wipreport\\static'...
-Listing '.\\wipreport\\static\\wipreport'...
-Listing '.\\wipreport\\static\\wipreport\\css'...
-Listing '.\\wipreport\\static\\wipreport\\js'...
-Listing '.\\wipreport\\templates'...
-Listing '.\\wipreport\\templates\\wipreport'...
-Listing '.\\wipreport\\templates\\wipreport\\partials'...
-PS D:\PERSONAL_SPACE\SW\python\4_zhbm> python manage.py runserver 127.0.0.1:8010
-Watching for file changes with StatReloader
-Performing system checks...
+notepad .\wipreport\migrations\0002_wipmove_wipmovegroup_wipreportlotpath.py
 
-System check identified no issues (0 silenced).
+netstat -ano | findstr :8010
 
-You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): wipreport.
-Run 'python manage.py migrate' to apply them.
-Error: You don't have permission to access that port.
-
-
-
-cd <프로젝트_루트>
-Select-String -Path ".\**\*.py", ".\**\*.html", ".\**\*.js" -Pattern "rawdata" 
-
-결과없음
+netsh interface ipv4 show excludedportrange protocol=tcp
