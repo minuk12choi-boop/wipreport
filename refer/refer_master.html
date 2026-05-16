@@ -1,0 +1,854 @@
+{% extends "facts/base.html" %}
+
+{% block content %}
+<div class="card master-config-card master-scroll-card">
+    <div class="card-header-row">
+        <h3>대시보드 기준정보</h3>
+    </div>
+
+    <div class="master-card-body-scroll">
+        <form method="post" class="master-config-form" id="dashboardConfigForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_dashboard_config">
+
+            <div class="master-config-grid compact-master-grid">
+                <div>
+                    <label>기본 PRP</label>
+                    <input type="text"
+                           name="default_prp"
+                           value="{{ dashboard_cfg.default_prp|default:'P1SD' }}"
+                           class="compact-input">
+                </div>
+                <div>
+                    <label>문의자</label>
+                    <input type="text"
+                           name="inquiry_contact"
+                           value="{{ dashboard_cfg.inquiry_contact|default:'minuk12.choi' }}"
+                           class="compact-input">
+                </div>
+                <div class="master-config-save-cell">
+                    <button type="submit" class="btn-primary btn-sm" data-show-loading="1">저장</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <h3>FACTS 사용 가이드 기준정보</h3>
+    </div>
+
+    <div class="master-card-body-scroll">
+        <form method="post" id="guidePathForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_guide_paths">
+
+            <div style="margin-bottom:12px; font-size:13px; color:#486888; line-height:1.7;">
+                가이드는 무조건 아래 경로 규칙을 따릅니다.<br>
+                <code>/static/facts/guide/page_001.png</code><br>
+                <code>/static/facts/guide/page_002.png</code><br>
+                ...<br>
+                즉, 서버의 <code>static/facts/guide</code> 폴더에 페이지 이미지를
+                <code>page_001.png</code> 형식으로 넣어두고, 아래 총 페이지 수만 저장하면 됩니다.
+            </div>
+
+            <div class="filter-grid" style="grid-template-columns: repeat(2, minmax(220px, 1fr)); gap:12px;">
+                <div>
+                    <label>가이드 제목</label>
+                    <input type="text"
+                           name="guide_title"
+                           class="compact-input"
+                           value="{{ current_guide.title|default:'FACTS 사용 가이드' }}">
+                </div>
+                <div>
+                    <label>총 페이지 수</label>
+                    <input type="number"
+                           name="guide_total_pages"
+                           class="compact-input compact-number"
+                           min="1"
+                           value="{% if current_guide_page_count %}{{ current_guide_page_count }}{% else %}1{% endif %}">
+                </div>
+            </div>
+
+            <div class="toolbar-inline" style="margin-top:12px;">
+                <button type="submit" class="btn-primary btn-sm" data-show-loading="1">저장</button>
+            </div>
+
+            <div style="margin-top:12px; font-size:13px; color:#486888; line-height:1.7;">
+                {% if current_guide %}
+                    <div><strong>현재 가이드명:</strong> {{ current_guide.title }}</div>
+                    <div><strong>현재 페이지 수:</strong> {{ current_guide_page_count }}</div>
+                    <div><strong>최종 업데이트:</strong> {{ current_guide.updated_at|date:"Y-m-d H:i:s" }}</div>
+                {% else %}
+                    <div>등록된 사용 가이드가 없습니다.</div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">VOC 공식답변 상태 기준정보</h3>
+            <span style="font-size:12px; color:#d32f2f; font-weight:700;">수정할 행 체크 후 최종 저장 시 반영됩니다.</span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="vocStatusAddRowBtn">행추가</button>
+            <button type="button" class="btn-secondary btn-sm" id="vocStatusDeleteCheckedBtn">선택삭제(비활성)</button>
+            <button type="submit" form="vocStatusForm" class="btn-primary btn-sm" data-show-loading="1">최종 저장</button>
+        </div>
+    </div>
+    <div class="master-card-body-scroll">
+        <form method="post" id="vocStatusForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_voc_status_save">
+            <div class="table-wrap compact-table-wrap master-box-table-wrap">
+                <table class="facts-table compact-facts-table master-compact-table" id="vocStatusTable">
+                    <thead>
+                        <tr><th><input type="checkbox" id="vocStatusCheckAll"></th><th>ID</th><th>상태명</th><th>정렬순서</th><th>활성</th></tr>
+                    </thead>
+                    <tbody id="vocStatusTbody">
+                        {% for row in voc_answer_status_rows %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="voc-status-row-check">
+                                <input type="hidden" name="voc_status_row_id_{{ forloop.counter0 }}" value="{{ row.id }}">
+                                <input type="hidden" name="voc_status_row_is_new_{{ forloop.counter0 }}" value="0">
+                                <input type="hidden" name="voc_status_row_checked_{{ forloop.counter0 }}" class="voc-status-row-checked-input" value="0">
+                                <input type="hidden" name="voc_status_row_delete_flag_{{ forloop.counter0 }}" class="voc-status-row-delete-input" value="0">
+                            </td>
+                            <td>{{ row.id }}</td>
+                            <td><input type="text" name="voc_status_row_name_{{ forloop.counter0 }}" value="{{ row.status_name }}" class="compact-input"></td>
+                            <td><input type="number" name="voc_status_row_sort_order_{{ forloop.counter0 }}" value="{{ row.sort_order }}" class="compact-input compact-number" min="0"></td>
+                            <td><select name="voc_status_row_is_active_{{ forloop.counter0 }}" class="compact-select"><option value="1" {% if row.is_active %}selected{% endif %}>Y</option><option value="0" {% if not row.is_active %}selected{% endif %}>N</option></select></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="empty-cell">등록된 상태값이 없습니다.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <input type="hidden" name="voc_status_total_rows" id="vocStatusTotalRows" value="{{ voc_answer_status_rows|length }}">
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">필요평가단계 기준정보</h3>
+            <span style="font-size:12px; color:#d32f2f; font-weight:700;">
+                수정은 해당 행에 체크를 한 후 값을 수정하시고 최종저장을 하셔야 최종저장이 반영됩니다.
+            </span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="masterAddRowBtn">행추가</button>
+            <button type="button" class="btn-secondary btn-sm" id="masterDeleteCheckedBtn">선택삭제</button>
+            <button type="submit" form="masterStageForm" class="btn-primary btn-sm" data-show-loading="1">최종 저장</button>
+        </div>
+    </div>
+
+    <div class="master-card-body-scroll">
+        <form method="post" id="masterStageForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_stage_save">
+
+            <div class="table-wrap compact-table-wrap master-box-table-wrap">
+                <table class="facts-table compact-facts-table master-compact-table" id="masterStageTable">
+                    <thead>
+                        <tr>
+                            <th style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                                <input type="checkbox" id="masterCheckAll">
+                            </th>
+                            <th class="w-id">ID</th>
+                            <th class="w-code">단계코드</th>
+                            <th class="w-name">단계명</th>
+                            <th class="w-order">정렬순서</th>
+                            <th class="w-active">활성</th>
+                        </tr>
+                    </thead>
+                    <tbody id="masterStageTbody">
+                        {% for row in eval_stages %}
+                        <tr>
+                            <td style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                                <input type="checkbox" class="master-row-check">
+                                <input type="hidden" name="row_id_{{ forloop.counter0 }}" value="{{ row.id }}">
+                                <input type="hidden" name="row_is_new_{{ forloop.counter0 }}" value="0">
+                                <input type="hidden" name="row_checked_{{ forloop.counter0 }}" class="row-checked-input" value="0">
+                                <input type="hidden" name="row_delete_flag_{{ forloop.counter0 }}" class="row-delete-input" value="0">
+                            </td>
+                            <td>{{ row.id }}</td>
+                            <td>
+                                <input type="text"
+                                       name="row_stage_code_{{ forloop.counter0 }}"
+                                       value="{{ row.stage_code }}"
+                                       class="compact-input">
+                            </td>
+                            <td>
+                                <input type="text"
+                                       name="row_stage_name_{{ forloop.counter0 }}"
+                                       value="{{ row.stage_name }}"
+                                       class="compact-input">
+                            </td>
+                            <td>
+                                <input type="number"
+                                       name="row_sort_order_{{ forloop.counter0 }}"
+                                       value="{{ row.sort_order }}"
+                                       class="compact-input compact-number"
+                                       min="0">
+                            </td>
+                            <td>
+                                <select name="row_is_active_{{ forloop.counter0 }}" class="compact-select">
+                                    <option value="1" {% if row.is_active %}selected{% endif %}>Y</option>
+                                    <option value="0" {% if not row.is_active %}selected{% endif %}>N</option>
+                                </select>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="empty-cell">등록된 평가단계가 없습니다.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <input type="hidden" name="total_rows" id="masterTotalRows" value="{{ eval_stages|length }}">
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">라인코드 기준정보</h3>
+            <span style="font-size:12px; color:#d32f2f; font-weight:700;">
+                수정은 해당 행에 체크를 한 후 값을 수정하시고 최종저장을 하셔야 최종저장이 반영됩니다.
+            </span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="lineAddRowBtn">행추가</button>
+            <button type="button" class="btn-secondary btn-sm" id="lineDeleteCheckedBtn">선택삭제</button>
+            <button type="submit" form="lineMasterForm" class="btn-primary btn-sm" data-show-loading="1">최종 저장</button>
+        </div>
+    </div>
+
+    <div class="master-card-body-scroll">
+        <form method="post" id="lineMasterForm">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_line_save">
+
+            <div class="table-wrap compact-table-wrap master-box-table-wrap">
+                <table class="facts-table compact-facts-table master-compact-table" id="lineMasterTable">
+                    <thead>
+                        <tr>
+                            <th style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                                <input type="checkbox" id="lineCheckAll">
+                            </th>
+                            <th class="w-id">ID</th>
+                            <th class="w-code">LINE_ID</th>
+                            <th class="w-name">LINE명</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lineMasterTbody">
+                        {% for row in line_rows %}
+                        <tr>
+                            <td style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                                <input type="checkbox" class="line-row-check">
+                                <input type="hidden" name="line_row_id_{{ forloop.counter0 }}" value="{{ row.id }}">
+                                <input type="hidden" name="line_row_is_new_{{ forloop.counter0 }}" value="0">
+                                <input type="hidden" name="line_row_checked_{{ forloop.counter0 }}" class="line-row-checked-input" value="0">
+                                <input type="hidden" name="line_row_delete_flag_{{ forloop.counter0 }}" class="line-row-delete-input" value="0">
+                            </td>
+                            <td>{{ row.id }}</td>
+                            <td>
+                                <input type="text"
+                                       name="line_row_line_id_{{ forloop.counter0 }}"
+                                       value="{{ row.line_id }}"
+                                       class="compact-input">
+                            </td>
+                            <td>
+                                <input type="text"
+                                       name="line_row_line_name_{{ forloop.counter0 }}"
+                                       value="{{ row.line_name }}"
+                                       class="compact-input">
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="empty-cell">등록된 라인코드가 없습니다.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <input type="hidden" name="line_total_rows" id="lineTotalRows" value="{{ line_rows|length }}">
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">PREVENT 기준정보</h3>
+            <span style="font-size:12px; color:#d32f2f; font-weight:700;">현재선택 라디오 기준으로 _TIP고려 계산과 PREVENT상태 TIP보기 그래프 기준색을 반영합니다.</span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="preventAddRowBtn">행추가</button>
+            <button type="button" class="btn-secondary btn-sm" id="preventDeleteCheckedBtn">선택삭제</button>
+            <button type="submit" form="preventRuleForm" class="btn-primary btn-sm" data-show-loading="1">최종 저장</button>
+        </div>
+    </div>
+    <div class="master-card-body-scroll">
+        <form method="post" id="preventRuleForm">{% csrf_token %}<input type="hidden" name="action" value="bulk_prevent_rule_save">
+            <div class="table-wrap compact-table-wrap master-box-table-wrap">
+                <table class="facts-table compact-facts-table master-compact-table" id="preventRuleTable">
+                    <thead><tr><th><input type="checkbox" id="preventCheckAll"></th><th>ID</th><th>정렬순서</th><th>PREVENT기준일</th><th>색상</th><th>적용</th><th>현재선택</th></tr></thead>
+                    <tbody id="preventRuleTbody">
+                    {% for row in prevent_rule_rows %}<tr><td><input type="checkbox" class="prevent-row-check"><input type="hidden" name="prevent_row_id_{{ forloop.counter0 }}" value="{{ row.id }}"><input type="hidden" name="prevent_row_is_new_{{ forloop.counter0 }}" value="0"><input type="hidden" name="prevent_row_checked_{{ forloop.counter0 }}" class="prevent-row-checked-input" value="0"><input type="hidden" name="prevent_row_delete_flag_{{ forloop.counter0 }}" class="prevent-row-delete-input" value="0"></td><td>{{ row.id }}</td><td><input type="number" class="compact-input compact-number" name="prevent_row_sort_order_{{ forloop.counter0 }}" value="{{ row.sort_order }}"></td><td><input type="number" class="compact-input compact-number" name="prevent_row_days_{{ forloop.counter0 }}" value="{{ row.prevent_days }}"></td><td><input type="color" name="prevent_row_color_{{ forloop.counter0 }}" value="{{ row.color_code|default:'#5B8FF9' }}"></td><td><select name="prevent_row_is_active_{{ forloop.counter0 }}" class="compact-select"><option value="1" {% if row.is_active %}selected{% endif %}>Y</option><option value="0" {% if not row.is_active %}selected{% endif %}>N</option></select></td><td class="center-cell"><input type="radio" name="prevent_current_row" value="{{ forloop.counter0 }}" {% if row.is_current %}checked{% endif %}></td></tr>{% empty %}<tr><td colspan="7" class="empty-cell">등록된 PREVENT 기준정보가 없습니다.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <input type="hidden" name="prevent_total_rows" id="preventTotalRows" value="{{ prevent_rule_rows|length }}">
+        </form>
+    </div>
+</div>
+
+<div class="card master-scroll-card">
+    <div class="card-header-row">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <h3 style="margin:0;">부서권한 기준정보</h3>
+            <span style="font-size:12px; color:#d32f2f; font-weight:700;">PAGE / LINE / PRP는 드롭다운 내부 체크박스로 복수 선택됩니다.</span>
+        </div>
+        <div class="toolbar-inline">
+            <button type="button" class="btn-secondary btn-sm" id="deptAddRowBtn">행추가</button>
+            <button type="button" class="btn-secondary btn-sm" id="deptDeleteCheckedBtn">선택삭제</button>
+            <button type="submit" form="deptPermissionForm" class="btn-primary btn-sm" data-show-loading="1">최종 저장</button>
+        </div>
+    </div>
+    <div class="master-card-body-scroll dept-permission-scroll">
+        <form method="post" id="deptPermissionForm">{% csrf_token %}<input type="hidden" name="action" value="bulk_dept_permission_save">
+            <div class="table-wrap compact-table-wrap master-box-table-wrap dept-inner-table-wrap">
+                <table class="facts-table compact-facts-table master-compact-table" id="deptPermissionTable">
+                    <thead><tr><th><input type="checkbox" id="deptCheckAll"></th><th>ID</th><th>사용자</th><th>조회</th><th>수정</th><th>활성</th><th>DEPT</th><th>PAGE별 권한(조회/수정)</th><th>LINE</th><th>PRP</th></tr></thead>
+                    <tbody id="deptPermissionTbody">
+                    {% for row in dept_permission_rows %}<tr><td><input type="checkbox" class="dept-row-check"><input type="hidden" name="dept_row_id_{{ forloop.counter0 }}" value="{{ row.id }}"><input type="hidden" name="dept_row_is_new_{{ forloop.counter0 }}" value="0"><input type="hidden" name="dept_row_checked_{{ forloop.counter0 }}" class="dept-row-checked-input" value="0"><input type="hidden" name="dept_row_delete_flag_{{ forloop.counter0 }}" class="dept-row-delete-input" value="0"></td><td>{{ row.id }}</td><td><input type="text" class="compact-input" name="dept_row_username_{{ forloop.counter0 }}" value="{{ row.username|default:'ALL' }}"></td><td class="center-cell"><input type="hidden" name="dept_row_can_view_{{ forloop.counter0 }}" value="0"><input type="checkbox" name="dept_row_can_view_{{ forloop.counter0 }}" value="1" {% if row.can_view %}checked{% endif %}></td><td class="center-cell"><input type="hidden" name="dept_row_can_edit_{{ forloop.counter0 }}" value="0"><input type="checkbox" name="dept_row_can_edit_{{ forloop.counter0 }}" value="1" {% if row.can_edit %}checked{% endif %}></td><td class="center-cell"><input type="hidden" name="dept_row_is_active_{{ forloop.counter0 }}" value="0"><input type="checkbox" name="dept_row_is_active_{{ forloop.counter0 }}" value="1" {% if row.is_active %}checked{% endif %}></td><td><select class="compact-select" name="dept_row_dept_{{ forloop.counter0 }}"><option value="ALL" {% if row.dept == 'ALL' or not row.dept %}selected{% endif %}>ALL</option>{% for opt in permission_source_options.dept_options %}<option value="{{ opt.id }}" {% if row.dept == opt.department %}selected{% endif %}>{{ opt.department }}</option>{% endfor %}</select></td><td><div class="dept-page-perm-grid">{% for p in permission_page_options %}{% if p != "ALL" %}<label style="display:flex; gap:6px; align-items:center; white-space:nowrap;"><span style="min-width:72px; display:inline-block;">{{ p }}</span><input type="hidden" name="dept_row_page_{{ p }}_can_view_{{ forloop.parentloop.counter0 }}" value="0"><input type="checkbox" class="dept-page-view" name="dept_row_page_{{ p }}_can_view_{{ forloop.parentloop.counter0 }}" value="1" {% if row.page_permissions and row.page_permissions.p and row.page_permissions.p.can_view %}checked{% elif p in row.page_values %}checked{% endif %}><span>조회</span><input type="hidden" name="dept_row_page_{{ p }}_can_edit_{{ forloop.parentloop.counter0 }}" value="0"><input type="checkbox" class="dept-page-edit" name="dept_row_page_{{ p }}_can_edit_{{ forloop.parentloop.counter0 }}" value="1" {% if row.page_permissions and row.page_permissions.p and row.page_permissions.p.can_edit %}checked{% endif %}><span>수정</span></label>{% endif %}{% endfor %}</div></td><td>{% include "facts/partials/multi_select_dropdown.html" with row_prefix="dept_row_line_values" row_index=forloop.counter0 selected_values=row.line_values options=permission_source_options.line_options %}</td><td>{% include "facts/partials/multi_select_dropdown.html" with row_prefix="dept_row_prp_values" row_index=forloop.counter0 selected_values=row.prp_values options=permission_source_options.prp_options %}</td></tr>{% empty %}<tr><td colspan="10" class="empty-cell">등록된 부서권한 기준정보가 없습니다.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <input type="hidden" name="dept_total_rows" id="deptTotalRows" value="{{ dept_permission_rows|length }}">
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+(function () {
+    const dashboardConfigForm = document.getElementById("dashboardConfigForm");
+    const guidePathForm = document.getElementById("guidePathForm");
+
+    const stageForm = document.getElementById("masterStageForm");
+    const stageTbody = document.getElementById("masterStageTbody");
+    const stageTotalRows = document.getElementById("masterTotalRows");
+    const stageAddBtn = document.getElementById("masterAddRowBtn");
+    const stageDeleteBtn = document.getElementById("masterDeleteCheckedBtn");
+    const stageCheckAll = document.getElementById("masterCheckAll");
+
+    const lineForm = document.getElementById("lineMasterForm");
+    const lineTbody = document.getElementById("lineMasterTbody");
+    const lineTotalRows = document.getElementById("lineTotalRows");
+    const lineAddBtn = document.getElementById("lineAddRowBtn");
+    const lineDeleteBtn = document.getElementById("lineDeleteCheckedBtn");
+    const lineCheckAll = document.getElementById("lineCheckAll");
+    const vocStatusTbody = document.getElementById("vocStatusTbody");
+    const vocStatusTotalRows = document.getElementById("vocStatusTotalRows");
+    const vocStatusAddRowBtn = document.getElementById("vocStatusAddRowBtn");
+    const vocStatusDeleteCheckedBtn = document.getElementById("vocStatusDeleteCheckedBtn");
+    const vocStatusCheckAll = document.getElementById("vocStatusCheckAll");
+
+    function bindStageRowChecks() {
+        stageTbody.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".master-row-check");
+            const checkedInput = tr.querySelector(".row-checked-input");
+            if (!checkbox || !checkedInput) return;
+
+            checkbox.addEventListener("change", () => {
+                checkedInput.value = checkbox.checked ? "1" : "0";
+            });
+        });
+    }
+
+    function bindLineRowChecks() {
+        lineTbody.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".line-row-check");
+            const checkedInput = tr.querySelector(".line-row-checked-input");
+            if (!checkbox || !checkedInput) return;
+
+            checkbox.addEventListener("change", () => {
+                checkedInput.value = checkbox.checked ? "1" : "0";
+            });
+        });
+    }
+
+    function bindVocStatusRowChecks() {
+        vocStatusTbody?.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".voc-status-row-check");
+            const checkedInput = tr.querySelector(".voc-status-row-checked-input");
+            if (!checkbox || !checkedInput || checkbox.dataset.bound === "1") return;
+            checkbox.dataset.bound = "1";
+            checkbox.addEventListener("change", () => {
+                checkedInput.value = checkbox.checked ? "1" : "0";
+            });
+        });
+    }
+
+    function validateStageRows() {
+        const rows = Array.from(stageTbody.querySelectorAll("tr")).filter(tr => tr.style.display !== "none");
+
+        for (const tr of rows) {
+            const isChecked = tr.querySelector(".master-row-check")?.checked;
+            const isNew = tr.querySelector("input[name^='row_is_new_']")?.value === "1";
+            const deleteFlag = tr.querySelector(".row-delete-input")?.value === "1";
+
+            if (deleteFlag) continue;
+            if (!(isChecked || isNew)) continue;
+
+            const stageCode = tr.querySelector("input[name^='row_stage_code_']")?.value.trim() || "";
+            const stageName = tr.querySelector("input[name^='row_stage_name_']")?.value.trim() || "";
+            const sortOrder = tr.querySelector("input[name^='row_sort_order_']")?.value.trim() || "";
+
+            if (!stageCode || !stageName) {
+                alert("필요평가단계 기준정보는 단계코드와 단계명이 필수기재입니다.");
+                return false;
+            }
+
+            if (sortOrder !== "" && Number(sortOrder) < 0) {
+                alert("정렬순서는 음수가 될 수 없습니다.");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function validateLineRows() {
+        const rows = Array.from(lineTbody.querySelectorAll("tr")).filter(tr => tr.style.display !== "none");
+
+        for (const tr of rows) {
+            const isChecked = tr.querySelector(".line-row-check")?.checked;
+            const isNew = tr.querySelector("input[name^='line_row_is_new_']")?.value === "1";
+            const deleteFlag = tr.querySelector(".line-row-delete-input")?.value === "1";
+
+            if (deleteFlag) continue;
+            if (!(isChecked || isNew)) continue;
+
+            const lineId = tr.querySelector("input[name^='line_row_line_id_']")?.value.trim() || "";
+            if (!lineId) {
+                alert("라인코드 기준정보는 LINE_ID가 필수기재입니다.");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function validateGuidePathForm() {
+        const totalPagesInput = guidePathForm.querySelector("input[name='guide_total_pages']");
+        const titleInput = guidePathForm.querySelector("input[name='guide_title']");
+
+        const totalPages = parseInt(totalPagesInput.value || "0", 10);
+        if (!titleInput.value.trim()) {
+            alert("가이드 제목을 입력하십시오.");
+            return false;
+        }
+        if (!Number.isInteger(totalPages) || totalPages < 1) {
+            alert("총 페이지 수는 1 이상의 숫자로 입력하십시오.");
+            return false;
+        }
+        return true;
+    }
+
+    stageAddBtn?.addEventListener("click", () => {
+        const idx = parseInt(stageTotalRows.value || "0", 10);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                <input type="checkbox" class="master-row-check" checked>
+                <input type="hidden" name="row_id_${idx}" value="">
+                <input type="hidden" name="row_is_new_${idx}" value="1">
+                <input type="hidden" name="row_checked_${idx}" class="row-checked-input" value="1">
+                <input type="hidden" name="row_delete_flag_${idx}" class="row-delete-input" value="0">
+            </td>
+            <td>-</td>
+            <td><input type="text" name="row_stage_code_${idx}" class="compact-input"></td>
+            <td><input type="text" name="row_stage_name_${idx}" class="compact-input"></td>
+            <td><input type="number" name="row_sort_order_${idx}" class="compact-input compact-number" min="0" value="0"></td>
+            <td>
+                <select name="row_is_active_${idx}" class="compact-select">
+                    <option value="1" selected>Y</option>
+                    <option value="0">N</option>
+                </select>
+            </td>
+        `;
+        stageTbody.appendChild(tr);
+        stageTotalRows.value = String(idx + 1);
+        bindStageRowChecks();
+    });
+
+    stageDeleteBtn?.addEventListener("click", () => {
+        stageTbody.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".master-row-check");
+            const deleteInput = tr.querySelector(".row-delete-input");
+            const checkedInput = tr.querySelector(".row-checked-input");
+            const isNew = tr.querySelector("input[name^='row_is_new_']");
+
+            if (!checkbox) return;
+
+            if (checkbox.checked) {
+                if (isNew && isNew.value === "1") {
+                    tr.remove();
+                } else {
+                    deleteInput.value = "1";
+                    checkedInput.value = "1";
+                    tr.style.display = "none";
+                }
+            }
+        });
+    });
+
+    stageCheckAll?.addEventListener("change", () => {
+        stageTbody.querySelectorAll(".master-row-check").forEach((chk) => {
+            const tr = chk.closest("tr");
+            if (tr && tr.style.display === "none") return;
+            chk.checked = stageCheckAll.checked;
+            chk.dispatchEvent(new Event("change"));
+        });
+    });
+
+    lineAddBtn?.addEventListener("click", () => {
+        const idx = parseInt(lineTotalRows.value || "0", 10);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="width:44px; min-width:44px; max-width:44px; padding:6px 4px;">
+                <input type="checkbox" class="line-row-check" checked>
+                <input type="hidden" name="line_row_id_${idx}" value="">
+                <input type="hidden" name="line_row_is_new_${idx}" value="1">
+                <input type="hidden" name="line_row_checked_${idx}" class="line-row-checked-input" value="1">
+                <input type="hidden" name="line_row_delete_flag_${idx}" class="line-row-delete-input" value="0">
+            </td>
+            <td>-</td>
+            <td><input type="text" name="line_row_line_id_${idx}" class="compact-input"></td>
+            <td><input type="text" name="line_row_line_name_${idx}" class="compact-input"></td>
+        `;
+        lineTbody.appendChild(tr);
+        lineTotalRows.value = String(idx + 1);
+        bindLineRowChecks();
+    });
+
+    lineDeleteBtn?.addEventListener("click", () => {
+        lineTbody.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".line-row-check");
+            const deleteInput = tr.querySelector(".line-row-delete-input");
+            const checkedInput = tr.querySelector(".line-row-checked-input");
+            const isNew = tr.querySelector("input[name^='line_row_is_new_']");
+
+            if (!checkbox) return;
+
+            if (checkbox.checked) {
+                if (isNew && isNew.value === "1") {
+                    tr.remove();
+                } else {
+                    deleteInput.value = "1";
+                    checkedInput.value = "1";
+                    tr.style.display = "none";
+                }
+            }
+        });
+    });
+
+    lineCheckAll?.addEventListener("change", () => {
+        lineTbody.querySelectorAll(".line-row-check").forEach((chk) => {
+            const tr = chk.closest("tr");
+            if (tr && tr.style.display === "none") return;
+            chk.checked = lineCheckAll.checked;
+            chk.dispatchEvent(new Event("change"));
+        });
+    });
+
+    vocStatusAddRowBtn?.addEventListener("click", () => {
+        const idx = parseInt(vocStatusTotalRows.value || "0", 10);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td><input type="checkbox" class="voc-status-row-check" checked><input type="hidden" name="voc_status_row_id_${idx}" value=""><input type="hidden" name="voc_status_row_is_new_${idx}" value="1"><input type="hidden" name="voc_status_row_checked_${idx}" class="voc-status-row-checked-input" value="1"><input type="hidden" name="voc_status_row_delete_flag_${idx}" class="voc-status-row-delete-input" value="0"></td>
+            <td>NEW</td>
+            <td><input type="text" name="voc_status_row_name_${idx}" class="compact-input"></td>
+            <td><input type="number" name="voc_status_row_sort_order_${idx}" value="0" class="compact-input compact-number" min="0"></td>
+            <td><select name="voc_status_row_is_active_${idx}" class="compact-select"><option value="1" selected>Y</option><option value="0">N</option></select></td>
+        `;
+        vocStatusTbody.appendChild(tr);
+        vocStatusTotalRows.value = String(idx + 1);
+        bindVocStatusRowChecks();
+    });
+
+    vocStatusDeleteCheckedBtn?.addEventListener("click", () => {
+        vocStatusTbody?.querySelectorAll("tr").forEach((tr) => {
+            const checkbox = tr.querySelector(".voc-status-row-check");
+            const deleteInput = tr.querySelector(".voc-status-row-delete-input");
+            const checkedInput = tr.querySelector(".voc-status-row-checked-input");
+            const isNew = tr.querySelector("input[name^='voc_status_row_is_new_']");
+            if (!checkbox?.checked) return;
+            if (isNew && isNew.value === "1") tr.remove();
+            else { deleteInput.value = "1"; checkedInput.value = "1"; tr.style.display = "none"; }
+        });
+    });
+
+    vocStatusCheckAll?.addEventListener("change", () => {
+        vocStatusTbody?.querySelectorAll(".voc-status-row-check").forEach((chk) => {
+            const tr = chk.closest("tr");
+            if (tr && tr.style.display === "none") return;
+            chk.checked = vocStatusCheckAll.checked;
+            chk.dispatchEvent(new Event("change"));
+        });
+    });
+
+    dashboardConfigForm?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+            e.preventDefault();
+        }
+    });
+
+    guidePathForm?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+            e.preventDefault();
+        }
+    });
+
+    stageForm?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+            e.preventDefault();
+        }
+    });
+
+    lineForm?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+            e.preventDefault();
+        }
+    });
+
+    guidePathForm?.addEventListener("submit", (e) => {
+        if (!validateGuidePathForm()) {
+            e.preventDefault();
+        }
+    });
+
+    stageForm?.addEventListener("submit", (e) => {
+        if (!validateStageRows()) {
+            e.preventDefault();
+        }
+    });
+
+    lineForm?.addEventListener("submit", (e) => {
+        if (!validateLineRows()) {
+            e.preventDefault();
+        }
+    });
+
+
+    function bindDropdowns() {
+        document.querySelectorAll('.multi-check-trigger').forEach((btn) => {
+            if (btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const wrap = btn.closest('.multi-check-dropdown');
+                wrap.classList.toggle('open');
+            });
+        });
+    }
+
+    function refreshMultiCheckDropdownLabels(root) {
+        (root || document).querySelectorAll('.multi-check-dropdown').forEach((box) => {
+            const trigger = box.querySelector('.multi-check-trigger');
+            const checked = Array.from(box.querySelectorAll("input[type='checkbox']:checked")).map((el) => el.value).filter(Boolean);
+            if (!trigger) return;
+            if (checked.length) {
+                const label = checked.join(', ');
+                trigger.textContent = label;
+                trigger.title = label;
+                trigger.classList.add('has-values');
+            } else {
+                trigger.textContent = '선택';
+                trigger.title = '';
+                trigger.classList.remove('has-values');
+            }
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        document.querySelectorAll('.multi-check-dropdown').forEach((wrap) => {
+            if (!wrap.contains(e.target)) wrap.classList.remove('open');
+        });
+    });
+
+    document.addEventListener('change', (e) => {
+        if (e.target.matches(".multi-check-dropdown input[type='checkbox']")) {
+            refreshMultiCheckDropdownLabels(document);
+        }
+    });
+
+    const preventTbody = document.getElementById('preventRuleTbody');
+    const preventTotalRows = document.getElementById('preventTotalRows');
+    const preventCheckAll = document.getElementById('preventCheckAll');
+    const preventAddRowBtn = document.getElementById('preventAddRowBtn');
+    const preventDeleteCheckedBtn = document.getElementById('preventDeleteCheckedBtn');
+
+    function bindPreventRowChecks() {
+        preventTbody?.querySelectorAll('tr').forEach((tr) => {
+            const checkbox = tr.querySelector('.prevent-row-check');
+            const checkedInput = tr.querySelector('.prevent-row-checked-input');
+            if (!checkbox || !checkedInput || checkbox.dataset.bound === '1') return;
+            checkbox.dataset.bound = '1';
+            checkbox.addEventListener('change', () => {
+                checkedInput.value = checkbox.checked ? '1' : '0';
+            });
+        });
+    }
+
+    preventAddRowBtn?.addEventListener('click', () => {
+        const idx = parseInt(preventTotalRows.value || '0', 10);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="checkbox" class="prevent-row-check" checked><input type="hidden" name="prevent_row_id_${idx}" value=""><input type="hidden" name="prevent_row_is_new_${idx}" value="1"><input type="hidden" name="prevent_row_checked_${idx}" class="prevent-row-checked-input" value="1"><input type="hidden" name="prevent_row_delete_flag_${idx}" class="prevent-row-delete-input" value="0"></td>
+            <td>NEW</td>
+            <td><input type="number" class="compact-input compact-number" name="prevent_row_sort_order_${idx}" value="0"></td>
+            <td><input type="number" class="compact-input compact-number" name="prevent_row_days_${idx}" value="7"></td>
+            <td><input type="color" name="prevent_row_color_${idx}" value="#5B8FF9"></td>
+            <td><select name="prevent_row_is_active_${idx}" class="compact-select"><option value="1" selected>Y</option><option value="0">N</option></select></td>
+            <td class="center-cell"><input type="radio" name="prevent_current_row" value="${idx}" checked></td>
+        `;
+        preventTbody.appendChild(tr);
+        preventTotalRows.value = String(idx + 1);
+        bindPreventRowChecks();
+    });
+
+    preventDeleteCheckedBtn?.addEventListener('click', () => {
+        preventTbody?.querySelectorAll('tr').forEach((tr) => {
+            const checkbox = tr.querySelector('.prevent-row-check');
+            const deleteInput = tr.querySelector('.prevent-row-delete-input');
+            const checkedInput = tr.querySelector('.prevent-row-checked-input');
+            const isNew = tr.querySelector("input[name^='prevent_row_is_new_']");
+            if (checkbox?.checked) {
+                if (isNew && isNew.value === '1') tr.remove();
+                else { deleteInput.value = '1'; checkedInput.value = '1'; tr.style.display = 'none'; }
+            }
+        });
+    });
+
+    preventCheckAll?.addEventListener('change', () => {
+        preventTbody?.querySelectorAll('.prevent-row-check').forEach((chk) => {
+            const tr = chk.closest('tr');
+            if (tr && tr.style.display === 'none') return;
+            chk.checked = preventCheckAll.checked;
+            chk.dispatchEvent(new Event('change'));
+        });
+    });
+
+    const deptTbody = document.getElementById('deptPermissionTbody');
+    const deptTotalRows = document.getElementById('deptTotalRows');
+    const deptCheckAll = document.getElementById('deptCheckAll');
+    const deptAddRowBtn = document.getElementById('deptAddRowBtn');
+    const deptDeleteCheckedBtn = document.getElementById('deptDeleteCheckedBtn');
+
+    function buildDropdownHtml(name, options) {
+        return `<div class="multi-check-dropdown"><button type="button" class="multi-check-trigger">선택</button><div class="multi-check-panel">${options.map((v) => `<label><input type="checkbox" name="${name}" value="${v}"> ${v}</label>`).join('')}</div></div>`;
+    }
+
+
+    function bindDeptPagePermissionCheckboxes(scope) {
+        (scope || document).querySelectorAll(".dept-page-perm-grid label").forEach((label) => {
+            const v = label.querySelector(".dept-page-view");
+            const e = label.querySelector(".dept-page-edit");
+            if (!v || !e || e.dataset.bound === "1") return;
+            e.dataset.bound = "1";
+            e.addEventListener("change", () => { if (e.checked) v.checked = true; });
+            v.addEventListener("change", () => { if (!v.checked) e.checked = false; });
+        });
+    }
+
+    function bindDeptRowChecks() {
+        deptTbody?.querySelectorAll('tr').forEach((tr) => {
+            const checkbox = tr.querySelector('.dept-row-check');
+            const checkedInput = tr.querySelector('.dept-row-checked-input');
+            if (!checkbox || !checkedInput || checkbox.dataset.bound === '1') return;
+            checkbox.dataset.bound = '1';
+            checkbox.addEventListener('change', () => {
+                checkedInput.value = checkbox.checked ? '1' : '0';
+            });
+        });
+    }
+
+    deptAddRowBtn?.addEventListener('click', () => {
+        const idx = parseInt(deptTotalRows.value || '0', 10);
+        const pageOptions = {{ permission_page_options|safe }};
+        const lineOptions = {{ permission_source_options.line_options|safe }};
+        const prpOptions = {{ permission_source_options.prp_options|safe }};
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="checkbox" class="dept-row-check" checked><input type="hidden" name="dept_row_id_${idx}" value=""><input type="hidden" name="dept_row_is_new_${idx}" value="1"><input type="hidden" name="dept_row_checked_${idx}" class="dept-row-checked-input" value="1"><input type="hidden" name="dept_row_delete_flag_${idx}" class="dept-row-delete-input" value="0"></td>
+            <td>NEW</td>
+            <td><input type="text" class="compact-input" name="dept_row_username_${idx}" value="ALL"></td>
+            <td class="center-cell"><input type="hidden" name="dept_row_can_view_${idx}" value="0"><input type="checkbox" name="dept_row_can_view_${idx}" value="1" checked></td>
+            <td class="center-cell"><input type="hidden" name="dept_row_can_edit_${idx}" value="0"><input type="checkbox" name="dept_row_can_edit_${idx}" value="1"></td>
+            <td class="center-cell"><input type="hidden" name="dept_row_is_active_${idx}" value="0"><input type="checkbox" name="dept_row_is_active_${idx}" value="1" checked></td>
+            <td><select class="compact-select" name="dept_row_dept_${idx}"><option value="ALL" selected>ALL</option>{% for opt in permission_source_options.dept_options %}<option value="{{ opt.id }}">{{ opt.department }}</option>{% endfor %}</select></td>
+            <td><div class="dept-page-perm-grid">["dashboard","prevent_tip","history","voc","master","kpi"].map((p)=>`<label style="display:flex; gap:6px; align-items:center; white-space:nowrap;"><span style="min-width:72px; display:inline-block;">${p}</span><input type="hidden" name="dept_row_page_${p}_can_view_${idx}" value="0"><input type="checkbox" class="dept-page-view" name="dept_row_page_${p}_can_view_${idx}" value="1"><span>조회</span><input type="hidden" name="dept_row_page_${p}_can_edit_${idx}" value="0"><input type="checkbox" class="dept-page-edit" name="dept_row_page_${p}_can_edit_${idx}" value="1"><span>수정</span></label>`).join("")</div></td>
+            <td>${buildDropdownHtml(`dept_row_line_values_${idx}`, lineOptions)}</td>
+            <td>${buildDropdownHtml(`dept_row_prp_values_${idx}`, prpOptions)}</td>
+        `;
+        deptTbody.appendChild(tr);
+        deptTotalRows.value = String(idx + 1);
+        bindDeptRowChecks();
+    bindDeptPagePermissionCheckboxes(document);
+        bindDropdowns();
+        bindDeptPagePermissionCheckboxes(tr);
+        refreshMultiCheckDropdownLabels(tr);
+    });
+
+    deptDeleteCheckedBtn?.addEventListener('click', () => {
+        deptTbody?.querySelectorAll('tr').forEach((tr) => {
+            const checkbox = tr.querySelector('.dept-row-check');
+            const deleteInput = tr.querySelector('.dept-row-delete-input');
+            const checkedInput = tr.querySelector('.dept-row-checked-input');
+            const isNew = tr.querySelector("input[name^='dept_row_is_new_']");
+            if (checkbox?.checked) {
+                if (isNew && isNew.value === '1') tr.remove();
+                else { deleteInput.value = '1'; checkedInput.value = '1'; tr.style.display = 'none'; }
+            }
+        });
+    });
+
+    deptCheckAll?.addEventListener('change', () => {
+        deptTbody?.querySelectorAll('.dept-row-check').forEach((chk) => {
+            const tr = chk.closest('tr');
+            if (tr && tr.style.display === 'none') return;
+            chk.checked = deptCheckAll.checked;
+            chk.dispatchEvent(new Event('change'));
+        });
+    });
+
+    bindStageRowChecks();
+    bindLineRowChecks();
+    bindPreventRowChecks();
+    bindDeptRowChecks();
+    bindDeptPagePermissionCheckboxes(document);
+    bindVocStatusRowChecks();
+    bindDropdowns();
+    refreshMultiCheckDropdownLabels(document);
+})();
+</script>
+{% endblock %}
