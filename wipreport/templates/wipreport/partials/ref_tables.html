@@ -1,5 +1,30 @@
 <div class="wip-ref-grid">
-{% for key,title in [('product','제품구분자 설정'),('module','모듈 설정'),('exclusion','HOLD유형 설정'),('hot','초HOT 기준 설정')] %}
-<section class="wip-ref-card" data-ref-table="{{ key }}"><div class="wip-card-header card-header-row"><div>{{ title }}</div><div class="wip-toolbar"><button type="button" class="wip-btn wip-btn-secondary add-row">행 추가</button><button type="button" class="wip-btn wip-btn-secondary del-row">선택 삭제</button><button type="button" class="wip-btn wip-btn-primary save-row">저장</button></div></div><div class="wip-card-body wip-table-scroll"><table class="wip-ref-table wip-table"><thead></thead><tbody></tbody></table></div></section>
+{% for section in ref_sections %}
+<section class="wip-ref-card" data-ref-table="{{ section.key }}">
+  <div class="wip-card-header card-header-row">
+    <div>
+      <strong>{{ section.title }}</strong>
+      <div class="wip-muted">{{ section.description }}</div>
+    </div>
+    <div class="wip-toolbar">
+      <button type="button" class="wip-btn wip-btn-secondary add-row">행 추가</button>
+      <button type="button" class="wip-btn wip-btn-secondary del-row">선택 삭제</button>
+      <button type="button" class="wip-btn wip-btn-primary save-row">저장</button>
+    </div>
+  </div>
+  <div class="wip-card-body wip-table-scroll">
+    <table class="wip-ref-table wip-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" class="check-all"></th>
+          {% for col in section.columns %}<th>{{ col }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="wip-empty-row"><td colspan="{{ section.columns|length|add:1 }}" class="wip-empty">저장된 데이터가 없으면 빈 행이 표시됩니다.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endfor %}
 </div>
