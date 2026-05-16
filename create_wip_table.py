@@ -6,6 +6,10 @@ import warnings
 import time
 
 import pandas as pd
+try:
+    import pymysql
+except ImportError:
+    pymysql = None
 
 
 
@@ -58,6 +62,88 @@ FINAL_REQUIRED_CONCAT_COLUMNS = ["lot_inform", "lot_id", "step_seq", "order_seq"
 
 class WipBuildError(Exception):
     pass
+
+
+def quote_mysql_identifier(name: str) -> str:
+    safe_name = str(name).replace("`", "``")
+    return f"`{safe_name}`"
+
+
+def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_lotpath") -> None:
+    if pymysql is None:
+        print("오류:")
+        print("pymysql이 설치되어 있지 않습니다.")
+        print("아래 명령으로 설치 후 재실행하세요.")
+        print("python -m pip install pymysql")
+        raise RuntimeError("pymysql 미설치")
+
+    print(f"[DB 적재] 대상 테이블: {table_name}")
+    print(f"[DB 적재] 대상 rows: {len(df)}")
+    print(f"[DB 적재] 대상 columns: {len(df.columns)}")
+
+    conn = None
+    cursor = None
+    stage = "connect"
+    try:
+        conn = pymysql.connect(
+            host="12.81.64.130",
+            user="minuk12.choi",
+            passwd="",
+            port=3306,
+            db="app_db",
+            charset="utf8mb4",
+        )
+        cursor = conn.cursor()
+
+        stage = "create_table"
+        quoted_table = quote_mysql_identifier(table_name)
+        col_defs = ",\n    ".join(
+            f"{quote_mysql_identifier(col)} TEXT NULL" for col in df.columns
+        )
+        create_sql = (
+            f"CREATE TABLE IF NOT EXISTS {quoted_table} (\n"
+            f"    {col_defs}\n"
+            ") CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        )
+        cursor.execute(create_sql)
+        print("[DB 적재] 테이블 생성 확인 완료")
+
+        stage = "truncate"
+        cursor.execute(f"TRUNCATE TABLE {quoted_table}")
+        print("[DB 적재] 기존 데이터 삭제 완료")
+
+        stage = "prepare_insert"
+        cols_sql = ", ".join(quote_mysql_identifier(c) for c in df.columns)
+        placeholders = ", ".join(["%s"] * len(df.columns))
+        insert_sql = f"INSERT INTO {quoted_table} ({cols_sql}) VALUES ({placeholders})"
+        prepared = df.where(pd.notna(df), None).copy()
+        prepared = prepared.astype("object")
+        for col in prepared.columns:
+            prepared[col] = prepared[col].map(
+                lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if isinstance(v, pd.Timestamp) else v
+            )
+        rows = [tuple(row) for row in prepared.itertuples(index=False, name=None)]
+
+        stage = "insert"
+        if rows:
+            cursor.executemany(insert_sql, rows)
+        print(f"[DB 적재] INSERT 완료: {len(rows)} rows")
+
+        stage = "commit"
+        conn.commit()
+        print("[DB 적재] commit 완료")
+    except Exception as exc:
+        if conn is not None:
+            conn.rollback()
+        print(f"[DB 적재 오류] 단계: {stage}")
+        print(f"[DB 적재 오류] 메시지: {exc}")
+        raise RuntimeError(f"DB 적재 실패(단계: {stage})") from exc
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+        print("[DB 적재] 연결 종료")
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -1442,6 +1528,8 @@ def main() -> None:
     with pd.ExcelWriter(output_concat_path, engine="openpyxl") as writer:
         wip_concat.to_excel(writer, index=False)
     print(f"[concat 저장 완료] 경로: {output_concat_path}")
+    print("[concat 저장 완료] output_wip_concat.xlsx 저장이 완료되었습니다. 이후 DB 적재를 수행합니다.")
+    dataframe_to_mysql_replace(wip_concat, "wip_report_lotpath")
 
     print("[입력 파일 요약]")
     for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("tip", tip_meta), ("mclot", mclot_meta), ("steppath", steppath_meta)]:
