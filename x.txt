@@ -1,1 +1,2 @@
-Remove-Item .\wipreport\migrations\0002_wipmove_wipmovegroup_wipreportlotpath.py
+python manage.py check
+python manage.py makemigrations --check --dry-run
