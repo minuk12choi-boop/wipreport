@@ -1,8 +1,13 @@
-cd D:\PERSONAL_SPACE\SW\python\4_zhbm
+<http://127.0.0.1:8031/wip/ref/ 화면의 텍스트만 복붙한것>
 
-python manage.py check
-python manage.py makemigrations --check --dry-run
+재공 Report
+Summary
+기준정보
+문의: minuk12.choi
+⑦~⑩ 기준정보
+행 추가/삭제/저장은 JS로 처리
 
-python manage.py migrate
-python -m compileall .
-python manage.py runserver 127.0.0.1:8031
+제품구분자 저장모듈 저장HOLD유형 저장초HOT 저장
+
+
+문제점: 
