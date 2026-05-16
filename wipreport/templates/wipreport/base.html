@@ -1,1 +1,5 @@
-<!doctype html><html lang='ko'><head><meta charset='utf-8'><title>재공 Report</title><link rel='stylesheet' href='/static/wipreport/css/wipreport.css'><script src='https://cdn.jsdelivr.net/npm/chart.js'></script></head><body><header class='topbar'><div>재공 Report</div><nav><a href='/wip/summary/'>Summary</a><a href='/wip/ref/'>기준정보</a></nav><div>문의: minuk12.choi</div></header><main>{% block content %}{% endblock %}</main></body></html>
+{% load static %}
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>재공 Report</title><link rel="stylesheet" href="{% static 'wipreport/css/wipreport.css' %}"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head><body>
+<header class="wip-header"><div class="wip-header-title">재공 Report</div><div class="wip-header-meta">문의: minuk12.choi / 적재시각: {{ latest_loaded_at|default:'-' }}</div></header>
+<nav class="wip-menubar"><a class="wip-menu-link" href="/wip/summary/">Summary</a><a class="wip-menu-link" href="/wip/ref/">기준정보</a></nav>
+<main class="wip-page">{% block content %}{% endblock %}</main></body></html>

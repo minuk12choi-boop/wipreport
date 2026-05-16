@@ -7,13 +7,8 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import (
-    WipRefExclusionTypeRule,
-    WipRefHotLotRule,
-    WipRefModuleRule,
-    WipRefProductRule,
-)
-from .services import build_summary
+from .models import WipRefExclusionTypeRule, WipRefHotLotRule, WipRefModuleRule, WipRefProductRule
+from .services import build_summary, get_latest_loaded_at
 
 logger = logging.getLogger(__name__)
 
@@ -22,88 +17,94 @@ def wip_root(request):
     return redirect('wip-summary')
 
 
+def _base_context():
+    return {"latest_loaded_at": get_latest_loaded_at()}
+
+
 def summary_page(request):
-    return render(request, 'wipreport/summary.html', {})
+    return render(request, 'wipreport/summary.html', _base_context())
 
 
 def ref_page(request):
-    context = {
-        'product_rules': [],
-        'module_rules': [],
-        'exclusion_rules': [],
-        'hot_rules': [],
-        'ref_error_message': '',
-    }
+    context = {**_base_context(), 'product_rules': [], 'module_rules': [], 'exclusion_rules': [], 'hot_rules': [], 'ref_error_message': ''}
     try:
-        context.update(
-            {
-                'product_rules': WipRefProductRule.objects.all().order_by('sort_no'),
-                'module_rules': WipRefModuleRule.objects.all().order_by('sort_no'),
-                'exclusion_rules': WipRefExclusionTypeRule.objects.all().order_by('sort_no'),
-                'hot_rules': WipRefHotLotRule.objects.all().order_by('sort_no'),
-            }
-        )
+        context.update({
+            'product_rules': WipRefProductRule.objects.filter(is_active=True).order_by('sort_no', 'id'),
+            'module_rules': WipRefModuleRule.objects.filter(is_active=True).order_by('sort_no', 'id'),
+            'exclusion_rules': WipRefExclusionTypeRule.objects.filter(is_active=True).order_by('sort_no', 'id'),
+            'hot_rules': WipRefHotLotRule.objects.filter(is_active=True).order_by('sort_no', 'id'),
+        })
     except (ProgrammingError, OperationalError) as exc:
         logger.exception('[ref-page 오류] %s: %s', exc.__class__.__name__, exc)
-        context['ref_error_message'] = (
-            '기준정보 테이블이 아직 생성되지 않았습니다. '
-            'python manage.py migrate 실행 후 다시 접속하세요.'
-        )
+        context['ref_error_message'] = '기준정보 테이블이 아직 생성되지 않았습니다. python manage.py migrate 실행 후 다시 접속하세요.'
     return render(request, 'wipreport/ref.html', context)
 
 
 @require_GET
 def summary_data(request):
-    data = build_summary({'lot_type': request.GET.getlist('lot_type')})
-    if isinstance(data, dict) and data.get('error') and settings.DEBUG and data.get('error_detail'):
-        return JsonResponse(data, safe=False)
-    if isinstance(data, dict):
+    data = build_summary(request.GET)
+    if isinstance(data, dict) and not settings.DEBUG:
         data.pop('error_detail', None)
     return JsonResponse(data, safe=False)
 
 
-def _save_all(model, rows):
-    model.objects.all().delete()
+def _validate_unique(rows, keys):
+    seen = set()
+    for row in rows:
+        key = tuple((row.get(k) or '').strip() for k in keys)
+        if key in seen:
+            return False
+        seen.add(key)
+    return True
+
+
+def _save_replace(model, rows):
+    model.objects.filter(is_active=True).delete()
     objs = []
-    for i, r in enumerate(rows, start=1):
-        r['sort_no'] = i
-        field_names = {f.name for f in model._meta.fields}
-        objs.append(
-            model(
-                **{
-                    k: v
-                    for k, v in r.items()
-                    if k in field_names and k not in {'id', 'created_at', 'updated_at'}
-                }
-            )
-        )
-    for o in objs:
-        o.save()
+    allowed = {f.name for f in model._meta.fields}
+    for i, row in enumerate(rows, start=1):
+        payload = {k: v for k, v in row.items() if k in allowed and k not in {'id', 'created_at', 'updated_at'}}
+        payload['sort_no'] = i
+        payload['is_active'] = True
+        objs.append(model(**payload))
+    model.objects.bulk_create(objs)
 
 
 @require_POST
 def save_product_rules(request):
     rows = json.loads(request.body or '{}').get('rows', [])
-    _save_all(WipRefProductRule, rows)
+    if not _validate_unique(rows, ['lot_char_1', 'lot_char_2', 'lot_char_3', 'lot_char_4', 'lot_char_5', 'processed']):
+        return JsonResponse({'ok': False, 'message': '제품구분 규칙 중복'}, status=400)
+    _save_replace(WipRefProductRule, rows)
     return JsonResponse({'ok': True})
 
 
 @require_POST
 def save_module_rules(request):
     rows = json.loads(request.body or '{}').get('rows', [])
-    _save_all(WipRefModuleRule, rows)
+    if not _validate_unique(rows, ['product_name', 'start_layer', 'end_layer', 'start_stepseq', 'end_stepseq', 'module_name']):
+        return JsonResponse({'ok': False, 'message': '모듈 규칙 중복'}, status=400)
+    _save_replace(WipRefModuleRule, rows)
     return JsonResponse({'ok': True})
 
 
 @require_POST
 def save_exclusion_rules(request):
     rows = json.loads(request.body or '{}').get('rows', [])
-    _save_all(WipRefExclusionTypeRule, rows)
+    valid_types = {'HOLD', 'FTP', '예약제외'}
+    for r in rows:
+        if (r.get('exclusion_kind') or '') not in valid_types:
+            return JsonResponse({'ok': False, 'message': 'type 값 오류'}, status=400)
+    if not _validate_unique(rows, ['exclusion_kind', 'condition_1', 'condition_2', 'condition_3']):
+        return JsonResponse({'ok': False, 'message': 'HOLD유형 규칙 중복'}, status=400)
+    _save_replace(WipRefExclusionTypeRule, rows)
     return JsonResponse({'ok': True})
 
 
 @require_POST
 def save_hot_rules(request):
     rows = json.loads(request.body or '{}').get('rows', [])
-    _save_all(WipRefHotLotRule, rows)
+    if not _validate_unique(rows, ['grade', 'condition_1', 'condition_2', 'condition_3']):
+        return JsonResponse({'ok': False, 'message': '초HOT 규칙 중복'}, status=400)
+    _save_replace(WipRefHotLotRule, rows)
     return JsonResponse({'ok': True})
