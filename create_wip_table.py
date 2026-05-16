@@ -324,6 +324,17 @@ def safe_to_datetime(series: pd.Series) -> pd.Series:
     return ser.apply(_parse_single_datetime)
 
 
+def log_datetime_parse_stats(label: str, raw_series: pd.Series, parsed_series: pd.Series, total: int | None = None) -> None:
+    total_count = int(total if total is not None else len(raw_series))
+    if total_count == 0:
+        print(f"[{label}] 파싱 성공: 0 / 0")
+        return
+    non_blank = int(raw_series.map(lambda v: not is_blank(v)).sum()) if len(raw_series) else 0
+    success = int(parsed_series.notna().sum()) if len(parsed_series) else 0
+    print(f"[{label}] non-blank: {non_blank} / {total_count}")
+    print(f"[{label}] 파싱 성공: {success} / {total_count}")
+
+
 def _normalize_text(value) -> str:
     if pd.isna(value):
         return ""
@@ -1245,6 +1256,16 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         base["eqpgroup_cham"] = work.groupby(group_keys, dropna=False)["tip_eqpcham"].agg(unique_concat_series).values
     else:
         base["eqpgroup_cham"] = pd.NA
+    eqpgroup_cham_blank_before = int(base["eqpgroup_cham"].map(is_blank).sum())
+    fill_mask = base["eqpgroup_cham"].map(is_blank) & ~base["eqpgroup"].map(is_blank)
+    replaced_cnt = int(fill_mask.sum())
+    base.loc[fill_mask, "eqpgroup_cham"] = base.loc[fill_mask, "eqpgroup"]
+    eqpgroup_cham_blank_after = int(base["eqpgroup_cham"].map(is_blank).sum())
+    eqpgroup_exists_cham_blank_after = int((~base["eqpgroup"].map(is_blank) & base["eqpgroup_cham"].map(is_blank)).sum())
+    print(f"[eqpgroup_cham 보정] 보정 전 blank rows: {eqpgroup_cham_blank_before}")
+    print(f"[eqpgroup_cham 보정] eqpgroup으로 대체한 rows: {replaced_cnt}")
+    print(f"[eqpgroup_cham 보정] 보정 후 blank rows: {eqpgroup_cham_blank_after}")
+    print(f"[eqpgroup_cham 검증] eqpgroup 존재 + eqpgroup_cham blank rows: {eqpgroup_exists_cham_blank_after}")
     eqp_eqpline_exists = "eqp_eqpline" in work.columns
     print(f"[eqpline 점검] output_wip eqp_eqpline 존재: {eqp_eqpline_exists}")
     if not eqp_eqpline_exists:
@@ -1275,12 +1296,36 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     print("[concat 경과일] step도착경과_일 / 마지막event경과_일 DAY 단위 계산 완료")
 
     work["_prevent_item"] = work.apply(make_prevent_item, axis=1)
+    prevent_target_mask = (
+        work.get("tip_type_body").map(lambda v: normalize_text(v) == "PREVENT")
+        | work.get("tip_type_cham").map(lambda v: normalize_text(v) == "PREVENT")
+    ) if ("tip_type_body" in work.columns and "tip_type_cham" in work.columns) else pd.Series(False, index=work.index)
+    prevent_target = work.loc[prevent_target_mask].copy()
+    prevent_total = len(prevent_target)
+    print(f"[prevent 진단] 대상 row 수: {prevent_total}")
+    prevent_sys_parsed = safe_to_datetime(prevent_target["sysdate"]) if prevent_total and "sysdate" in prevent_target.columns else pd.Series(dtype="datetime64[ns]")
+    print(f"[prevent 진단] sysdate 파싱 성공: {int(prevent_sys_parsed.notna().sum())} / {prevent_total}")
+    tip_event_col_exists = "tip_tip_eventtime" in prevent_target.columns
+    print(f"[prevent 진단] tip_tip_eventtime 컬럼 존재: {tip_event_col_exists}")
+    if tip_event_col_exists and prevent_total:
+        tip_event_nonblank = int(prevent_target["tip_tip_eventtime"].map(lambda v: not is_blank(v)).sum())
+        tip_event_parsed = safe_to_datetime(prevent_target["tip_tip_eventtime"])
+        print(f"[prevent 진단] tip_tip_eventtime non-blank: {tip_event_nonblank} / {prevent_total}")
+        print(f"[prevent 진단] tip_tip_eventtime 파싱 성공: {int(tip_event_parsed.notna().sum())} / {prevent_total}")
+    elif prevent_total:
+        print(f"[prevent 진단] tip_tip_eventtime non-blank: 0 / {prevent_total}")
+        print(f"[prevent 진단] tip_tip_eventtime 파싱 성공: 0 / {prevent_total}")
     prevent_items = (
         work.groupby(group_keys, dropna=False)["_prevent_item"]
         .apply(lambda s: ", ".join(sorted(set([_normalize_text(v) for v in s if _normalize_text(v)]))) if any(_normalize_text(v) for v in s) else pd.NA)
     )
     base["prevent"] = prevent_items.values
     base["prevent"] = base["prevent"].apply(lambda x: pd.NA if pd.isna(x) else f"PREVENT: {x}")
+    prevent_fail_items = int(base["prevent"].astype("string").str.count("경과일계산불가").fillna(0).sum())
+    prevent_target_items = int(base["prevent"].astype("string").str.count(r"\(").fillna(0).sum())
+    print(f"[prevent 진단] 경과일계산불가 item 수: {prevent_fail_items}")
+    if prevent_target_items > 0 and prevent_fail_items == prevent_target_items:
+        print("[prevent 경고] 대상 item이 있으나 경과일계산불가가 전부입니다.")
     print("[concat 검증] prevent tip_tip_eventtime 기준 경과일 계산 완료")
 
     issue_candidate_cols = ["eqpissuetime", "tip_eqpissuetime", "tip_tip_eventtime", "eqp_body_status_change_time", "body_status_change_time", "body_status_change_time_eqp"]
@@ -1300,6 +1345,9 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     total_issue_target = len(issue_target)
     print(f"[issue_eqp 진단] 대상 row 수: {total_issue_target}")
     issue_target["_sysdate_dt"] = safe_to_datetime(issue_target.get("sysdate")) if total_issue_target else pd.Series(dtype="datetime64[ns]")
+    print(f"[issue_eqp 진단] sysdate 파싱 성공: {int(issue_target['_sysdate_dt'].notna().sum())} / {total_issue_target}")
+    print(f"[issue_eqp 진단] eqpissuetime 후보 컬럼 존재 여부: { {c:(c in issue_target.columns) for c in ['eqpissuetime','tip_eqpissuetime']} }")
+    print(f"[issue_eqp 진단] eqp_body_status_change_time 후보 존재 여부: { {c:(c in issue_target.columns) for c in ['eqp_body_status_change_time','body_status_change_time','body_status_change_time_eqp']} }")
 
     for c in issue_candidate_cols:
         print(f"[issue_eqp 진단] {c} non-blank: {_series_nonblank_count(issue_target, c)} / {total_issue_target}")
@@ -1327,7 +1375,7 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
 
     ref_ok = int(issue_target["_issue_ref"].notna().sum()) if total_issue_target else 0
     issue_fail = int((issue_target["_sysdate_dt"].isna() | issue_target["_issue_ref"].isna()).sum()) if total_issue_target else 0
-    print(f"[issue_eqp 진단] 기준일 최종 성공 rows: {ref_ok} / {total_issue_target}")
+    print(f"[issue_eqp 진단] 기준일 계산 성공: {ref_ok} / {total_issue_target}")
     print(f"[issue_eqp 진단] 경과일계산불가 item 수: {issue_fail}")
     if total_issue_target and ref_ok == 0:
         print("[issue_eqp 경고] 기준일 최종 성공 rows가 0입니다. 원천 시간값 또는 포맷을 확인하세요.")
@@ -1359,10 +1407,22 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     for parts in issue_group["DOWN"]:
         issue_values.append(" / ".join(parts) if parts else pd.NA)
     base["issue_eqp"] = issue_values
+    issue_fail_items = int(base["issue_eqp"].astype("string").str.count("경과일계산불가").fillna(0).sum())
+    issue_target_items = int(base["issue_eqp"].astype("string").str.count(r"\(").fillna(0).sum())
+    if issue_target_items > 0 and issue_fail_items == issue_target_items:
+        print("[issue_eqp 경고] 대상 item이 있으나 경과일계산불가가 전부입니다.")
     print("[concat 검증] issue_eqp 기준일 min(eqpissuetime, eqp_body_status_change_time) 계산 완료")
 
     base = apply_wait_blocked_status(base, work, group_keys)
 
+    for cat, flag_col, date_col in [("HOLD", "hold", "hold_date"), ("FTP", "ftp", "ftp_date"), ("예약제외", "예약제외", "예약제외_date")]:
+        target_rows = int(base[flag_col].map(is_o).sum()) if flag_col in base.columns else 0
+        non_blank = int(base[date_col].map(lambda v: not is_blank(v)).sum()) if date_col in base.columns else 0
+        parsed = safe_to_datetime(base[date_col]) if date_col in base.columns else pd.Series(dtype="datetime64[ns]")
+        parsed_cnt = int(parsed.notna().sum()) if len(parsed) else 0
+        print(f"[exclusion_type 진단] {cat} 대상 rows: {target_rows}")
+        print(f"[exclusion_type 진단] {cat} {date_col} non-blank: {non_blank}")
+        print(f"[exclusion_type 진단] {cat} {date_col} 파싱 성공: {parsed_cnt}")
     base["exclusion_type"] = base.apply(build_exclusion_type, axis=1)
     if "exclusion_type" not in base.columns:
         raise RuntimeError("exclusion_type 생성에 실패했습니다.")
@@ -1377,6 +1437,9 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     print(f"[exclusion_type 진단] FTP 라인 생성 rows: {ftp_line_cnt}")
     print(f"[exclusion_type 진단] 예약제외 라인 생성 rows: {exc_line_cnt}")
     print(f"[exclusion_type 진단] 경과일계산불가 포함 rows: {elapsed_fail_cnt}")
+    exclusion_target_rows = int(base[["hold", "ftp", "예약제외"]].apply(lambda r: any(is_o(v) for v in r), axis=1).sum()) if all(c in base.columns for c in ["hold", "ftp", "예약제외"]) else 0
+    if exclusion_target_rows > 0 and elapsed_fail_cnt == exclusion_target_rows:
+        print("[exclusion_type 경고] 대상 rows가 있으나 경과일계산불가 포함 rows가 전부입니다.")
 
     # exclusion_type 형식 검증(경고 로그)
     if "exclusion_type" not in base.columns:
@@ -1441,6 +1504,15 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         invalid_issue = tokens.str.split(", ").apply(lambda arr: any(pd.notna(x) and not re.match(label_pattern, x) for x in arr)).any()
         if invalid_issue:
             raise WipBuildError("issue_eqp 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+    if "exclusion_type" in base.columns:
+        ex_tokens_ok = base["exclusion_type"].dropna().astype(str).apply(
+            lambda txt: all(
+                ("일↑" in line or "경과일계산불가" in line)
+                for line in [ln.strip() for ln in txt.split("\n") if ln.strip().startswith(("HOLD:", "FTP:", "예약제외:"))]
+            )
+        ).all()
+        if not ex_tokens_ok:
+            raise WipBuildError("exclusion_type 형식 오류: HOLD/FTP/예약제외 라인에 경과일 또는 경과일계산불가가 필요합니다.")
     if "status_reason" in base.columns and "status" in base.columns:
         if list(base.columns).index("status_reason") != list(base.columns).index("status") + 1:
             raise WipBuildError("status_reason 위치 오류: status 바로 오른쪽에 있어야 합니다.")
