@@ -1,5 +1,5 @@
 from collections import defaultdict, Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import logging
 import re
@@ -8,13 +8,21 @@ from django.conf import settings
 from django.db import connection
 from django.db.models import Model, QuerySet
 
-from .models import WipMoveGroup, WipRefExclusionTypeRule, WipRefHotLotRule, WipRefModuleRule, WipRefProductRule, WipReportLotPath
-from .ref_services import area_from_eqp, classify_hot_lot, classify_module, classify_product, parse_issue_eqp, parse_prevent
+from .models import WipMoveGroup, WipRefHotLotRule, WipRefModuleRule, WipRefProductRule, WipReportLotPath
+from .ref_services import area_from_eqp, classify_hot_lot, classify_module, classify_product, parse_prevent
 
 logger = logging.getLogger(__name__)
-WIP_FIELDS = ["lot_id", "status", "cur_qty", "lot_type", "proc_id", "layer_id", "step_seq", "step_desc", "order_seq", "continuous", "issue_eqp", "prevent", "exclusion_type", "grade", "lot_inform"]
-STATUS_ORDER = ["HOLD", "RUN", "WAIT", "WAIT(진행불가)"]
-STATUS_COLOR = {"HOLD": "#d9534f", "RUN": "#337ab7", "WAIT": "#3c9d3c", "WAIT(진행불가)": "#e0ad00"}
+
+BASE_FIELDS = [
+    'sys_line_id', 'cur_line_id', 'eqpline', 'sysdate', 'lot_inform', 'lot_id', 'status', 'status_reason', 'grade', 'lot_type',
+    'lot_level', 'cur_qty', 'carr_id', 'bay_name', 'proc_id', 'order_seq', 'sample_step_type', 'metal_status', 'layer_id',
+    'step_level', 'continuous', 'step_seq', 'step_desc', 'recipe_id', 'tkintype', 'batch_kind', 'eqp_type', 'eqpgroup',
+    'eqpgroup_cham', 'prevent', 'issue_eqp', 'input_elapsed_days', 'step_arrive_elapsed_days', 'last_event_elapsed_days',
+    'start_date', 'last_tkout_date', 'step_arrive_date', 'last_event_date', 'exclusion_type'
+]
+STATUS_ORDER = ['HOLD', 'RUN', 'WAIT', 'WAIT(진행불가)']
+STATUS_COLOR = {'HOLD': '#d9534f', 'RUN': '#337ab7', 'WAIT': '#3c9d3c', 'WAIT(진행불가)': '#e0ad00'}
+MOVE_LOT_TYPES = {'PP', 'PB', 'PG'}
 
 
 def get_latest_loaded_at():
@@ -35,29 +43,51 @@ def _to_num(v):
         return 0.0
 
 
-def _parse_elapsed(text):
-    m = re.search(r'(\d+(?:\.\d+)?)\s*일', text or '')
-    return float(m.group(1)) if m else 0.0
+def _to_date(v):
+    if not v:
+        return None
+    s = str(v).strip()
+    for f in ('%Y-%m-%d', '%Y/%m/%d', '%Y%m%d'):
+        try:
+            return datetime.strptime(s[:10] if f != '%Y%m%d' else s[:8], f).date()
+        except Exception:
+            pass
+    return None
 
 
-def _parse_exclusion_details(text):
+def _parse_issue_eqp_blocks(text):
+    s = (text or '').strip()
+    if not s:
+        return []
+    label_pat = re.compile(r'(DOWN|PM|LOCAL)\s*:\s*', re.I)
+    matches = list(label_pat.finditer(s))
     out = []
-    for kind, body in re.findall(r'(HOLD|FTP|예약제외)\s*[:\-]\s*([^/]+)', text or '', re.I):
-        reason = ''
-        rm = re.search(r'reason\s*[:=]\s*([^,\)]+)', body, re.I)
-        if rm:
-            reason = rm.group(1).strip()
-        elif ',' in body:
-            reason = body.split(',')[-1].strip()
-        else:
-            reason = body.strip()
-        out.append({'kind': kind.upper(), 'reason': reason, 'elapsed': _parse_elapsed(body)})
+    for i, m in enumerate(matches):
+        status = m.group(1).upper()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(s)
+        body = s[start:end].strip(' /,')
+        for eqp, elapsed in re.findall(r'([^,\(\)/]+?)\s*\((\d+(?:\.\d+)?)\s*일↑?\)', body):
+            out.append({'status': status, 'eqp': eqp.strip(), 'days': float(elapsed)})
     return out
+
+
+def _is_user_like(text):
+    t = (text or '').strip()
+    if not t:
+        return True
+    if re.search(r'mgr$', t, re.I):
+        return True
+    if re.match(r'^\d{8}_.+', t):
+        return True
+    if re.match(r'^[A-Za-z0-9_\-]+$', t) and len(t) <= 20 and ('user' in t.lower() or 'mgr' in t.lower()):
+        return True
+    return False
 
 
 def _reason_summary(reason):
     r = (reason or '').strip()
-    if not r or r == '-':
+    if (not r) or r == '-' or _is_user_like(r):
         return '상세 사유 미기입. 확인 필요'
     lo = r.lower()
     if '진행금지' in r:
@@ -66,7 +96,23 @@ def _reason_summary(reason):
         return 'FLOW 금지/제한'
     if 'wait' in lo:
         return '대기 조건성 HOLD'
-    return r[:30]
+    return r[:40]
+
+
+def _parse_exclusion_details(text):
+    out = []
+    for m in re.finditer(r'(HOLD|FTP|예약제외)\s*:\s*([^|;]+)', text or '', re.I):
+        kind = m.group(1).upper()
+        body = m.group(2).strip()
+        parts = [p.strip() for p in body.split('/') if p.strip()]
+        elapsed = _to_num(re.search(r'(\d+(?:\.\d+)?)\s*일', parts[-1]).group(1)) if parts and re.search(r'일', parts[-1]) else 0.0
+        reason = ''
+        if len(parts) >= 3:
+            reason = '/'.join(parts[1:-1]).strip()
+        elif len(parts) == 2:
+            reason = parts[0] if not _is_user_like(parts[0]) else ''
+        out.append({'kind': kind, 'reason': reason, 'elapsed': elapsed})
+    return out
 
 
 def make_json_safe(value):
@@ -80,112 +126,172 @@ def make_json_safe(value):
     return value
 
 
-def _build_summary_sections(uniq_rows):
-    bn = defaultdict(lambda: {"wait": 0.0, "hold": 0.0, "blocked": 0.0, "lots": set(), "proc": '-', "layer": '-', "step": '-', "desc": ''})
-    eqp = defaultdict(lambda: {"qty": 0.0, "lots": set(), "days": [], "status": '', "area": '미정'})
-    tip = defaultdict(lambda: {"qty": 0.0, "lots": set(), "days": [], "area": '미정'})
-    ex = defaultdict(lambda: {"qty": 0.0, "lots": set(), "reasons": [], "elapsed": []})
+def _build_summary_sections(rows):
+    bn = defaultdict(lambda: {'wait': 0.0, 'hold': 0.0, 'blocked': 0.0, 'lots': set(), 'desc': '-', 'eqpgroups': set()})
+    eqp = defaultdict(lambda: {'qty': 0.0, 'lots': set(), 'days': []})
+    ex = defaultdict(lambda: {'qty': 0.0, 'lots': set(), 'reasons': [], 'elapsed': []})
 
-    by_lot = defaultdict(list)
-    for r in uniq_rows:
-        by_lot[r.get('lot_id') or ''].append(r)
-        qty = _to_num(r.get('cur_qty')); lot = r.get('lot_id') or ''; st = r.get('status') or ''
+    for r in rows:
+        qty = _to_num(r.get('cur_qty')); lot = r.get('lot_id') or ''
         key = (r.get('proc_id') or '-', r.get('layer_id') or '-', str(r.get('step_seq') or '-'))
-        if st in ['WAIT', 'HOLD', 'WAIT(진행불가)']:
-            b = bn[key]; b['proc'], b['layer'], b['step'], b['desc'] = key[0], key[1], key[2], r.get('step_desc') or ''
-            b['lots'].add(lot); b['wait'] += qty if st == 'WAIT' else 0; b['hold'] += qty if st == 'HOLD' else 0; b['blocked'] += qty if st == 'WAIT(진행불가)' else 0
-        for i in parse_issue_eqp(r.get('issue_eqp') or ''):
-            k = (i.get('eqp') or '-', i.get('status') or '미정'); a = eqp[k]; a['qty'] += qty; a['lots'].add(lot); a['status'] = k[1]; a['days'].append(_to_num(i.get('days'))); a['area'] = area_from_eqp(k[0])
-        for p in parse_prevent(r.get('prevent') or ''):
-            k = p.get('eqp') or '-'; a = tip[k]; a['qty'] += qty; a['lots'].add(lot); a['days'].append(_to_num(p.get('days'))); a['area'] = area_from_eqp(k)
+        st = r.get('status') or ''
+        if st in ('WAIT', 'HOLD', 'WAIT(진행불가)'):
+            x = bn[key]; x['lots'].add(lot); x['desc'] = r.get('step_desc') or '-'
+            if r.get('eqpgroup'): x['eqpgroups'].add(r['eqpgroup'])
+            if r.get('eqpgroup_cham'): x['eqpgroups'].add(r['eqpgroup_cham'])
+            x['wait'] += qty if st == 'WAIT' else 0
+            x['hold'] += qty if st == 'HOLD' else 0
+            x['blocked'] += qty if st == 'WAIT(진행불가)' else 0
+        for i in _parse_issue_eqp_blocks(r.get('issue_eqp') or ''):
+            k = (i['eqp'], i['status'])
+            eqp[k]['qty'] += qty; eqp[k]['lots'].add(lot); eqp[k]['days'].append(i['days'])
         for d in _parse_exclusion_details(r.get('exclusion_type') or ''):
-            k = (r.get('proc_id') or '-', r.get('layer_id') or '-', str(r.get('step_seq') or '-'))
-            a = ex[k]; a['qty'] += qty; a['lots'].add(lot); a['reasons'].append(_reason_summary(d['reason'])); a['elapsed'].append(d['elapsed'])
+            k = (r.get('proc_id') or '-', r.get('layer_id') or '-', str(r.get('step_seq') or '-'), d['kind'])
+            ex[k]['qty'] += qty; ex[k]['lots'].add(lot); ex[k]['reasons'].append(_reason_summary(d['reason'])); ex[k]['elapsed'].append(d['elapsed'])
 
+    bn_items = sorted(
+        bn.items(), key=lambda kv: (kv[1]['wait'], kv[1]['blocked'], kv[1]['hold'], kv[1]['wait'] + kv[1]['blocked'] + kv[1]['hold']), reverse=True
+    )[:5]
     bn_lines = []
-    bn_items = sorted(bn.items(), key=lambda kv: kv[1]['wait'] + kv[1]['hold'] + kv[1]['blocked'], reverse=True)[:5]
     for (proc, layer, step), v in bn_items:
         total = int(v['wait'] + v['hold'] + v['blocked'])
-        msg = f"PROC: {proc} / Layer: {layer} / Step: {step} | 대기성 재공: {total}매({len(v['lots'])}Lot) = WAIT {int(v['wait'])}매 + HOLD {int(v['hold'])}매 + WAIT(진행불가) {int(v['blocked'])}매"
-        bn_lines.append(msg)
-    if not bn_lines: bn_lines = ['해당 이슈 없음']
+        reason = '현재 Step 자체의 대기/보류 재공 집중'
+        bn_lines.append(f"PROC: {proc}<br>Layer: {layer}<br>Step: {step} / DESC: {v['desc'] or '-'}<br>EQP Group: {', '.join(sorted(v['eqpgroups'])) if v['eqpgroups'] else '-'}<br>대기성 재공: {total}매({len(v['lots'])}Lot)<br>구성: WAIT {int(v['wait'])}매 / HOLD {int(v['hold'])}매 / WAIT(진행불가) {int(v['blocked'])}매<br>사유: {reason}")
 
-    follow_msgs = []
-    for (proc, layer, step), _ in bn_items:
-        lots = [lot for lot, rows in by_lot.items() if any((r.get('proc_id') or '-') == proc and (r.get('layer_id') or '-') == layer and str(r.get('step_seq') or '-') == step and (r.get('continuous') or '').startswith('연속첫') for r in rows)]
-        for lot in lots[:3]:
-            rows = sorted(by_lot[lot], key=lambda x: _to_num(x.get('order_seq')))
-            for rr in rows:
-                if _to_num(rr.get('order_seq')) <= 0: continue
-                if rr.get('issue_eqp') or rr.get('prevent') or rr.get('exclusion_type') or (rr.get('status') == 'WAIT(진행불가)'):
-                    follow_msgs.append(f"현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step({rr.get('proc_id')}/{rr.get('layer_id')}/{rr.get('step_seq')}) 이슈로 진입 제한 가능성이 있습니다.")
-                    break
+    eqp_lines = [f"EQP: {k[0]}<br>상태: {k[1]} / 경과: {max(v['days'] or [0]):.1f}일↑<br>대기성 재공: {int(v['qty'])}매({len(v['lots'])}Lot)<br>확인필요: {area_from_eqp(k[0])}" for k, v in sorted(eqp.items(), key=lambda kv: kv[1]['qty'], reverse=True)[:5]] or ['해당 이슈 없음']
+    ex_lines = []
+    for k, v in sorted(ex.items(), key=lambda kv: kv[1]['qty'], reverse=True)[:5]:
+        rep = Counter(v['reasons']).most_common(1)[0][0] if v['reasons'] else '상세 사유 미기입. 확인 필요'
+        ex_lines.append(f"PROC: {k[0]}<br>Layer: {k[1]} / Step: {k[2]}<br>유형: {k[3]}<br>대기성 재공: {int(v['qty'])}매({len(v['lots'])}Lot)<br>대표 사유: {rep}<br>평균 경과: {(sum(v['elapsed'])/len(v['elapsed'])) if v['elapsed'] else 0:.1f}일↑")
 
-    def _top(acc, fn):
-        return [fn(k, v) for k, v in sorted(acc.items(), key=lambda kv: kv[1]['qty'], reverse=True)[:5]] or ['해당 이슈 없음']
-
-    eqp_lines = _top(eqp, lambda k, v: f"EQP: {k[0]} / 상태: {v['status']} / 경과: {max(v['days'] or [0]):.1f}일↑ | 대기성 재공: {int(v['qty'])}매({len(v['lots'])}Lot), Area: {v['area']}")
-    tip_lines = _top(tip, lambda k, v: f"EQP: {k} / 상태: PREVENT / 경과: {max(v['days'] or [0]):.1f}일↑ | 대기성 재공: {int(v['qty'])}매({len(v['lots'])}Lot)")
-    ex_lines = _top(ex, lambda k, v: f"PROC: {k[0]} / Layer: {k[1]} / Step: {k[2]} | {int(v['qty'])}매({len(v['lots'])}Lot), 대표 사유: {Counter(v['reasons']).most_common(1)[0][0] if v['reasons'] else '미정'}, 평균 경과: {(sum(v['elapsed'])/len(v['elapsed'])) if v['elapsed'] else 0:.1f}일↑")
-
-    if follow_msgs: bn_lines.extend(follow_msgs[:3])
-    return [{"title": "[B/N] 병목 후보 Top 5", "lines": bn_lines}, {"title": "[설비이슈] 설비 이슈 Top 5", "lines": eqp_lines}, {"title": "[TIP] Prevent Top 5", "lines": tip_lines}, {"title": "[EXCLUSION] HOLD/FTP/예약제외 Top 5", "lines": ex_lines}]
+    return [
+        {'title': '[B/N] 병목 후보 Top 5', 'lines': bn_lines or ['해당 이슈 없음']},
+        {'title': '[설비이슈] 설비 이슈 Top 5', 'lines': eqp_lines},
+        {'title': '[TIP] Prevent Top 5', 'lines': ['-']},
+        {'title': '[EXCLUSION] HOLD/FTP/예약제외 Top 5', 'lines': ex_lines or ['해당 이슈 없음']},
+    ]
 
 
 def build_summary(params):
     try:
-        lot_types = params.getlist('lot_type') if hasattr(params, 'getlist') else (params.get('lot_type') or ['PP'])
-        lot_types = lot_types or ['PP']
+        requested_lot_types = params.getlist('lot_type') if hasattr(params, 'getlist') else []
         page_size = min(max(int((params.get('page_size') if hasattr(params, 'get') else None) or 200), 1), 500)
         product_rules = list(WipRefProductRule.objects.filter(is_active=True).order_by('sort_no', 'id'))
         module_rules = list(WipRefModuleRule.objects.filter(is_active=True).order_by('sort_no', 'id'))
         hot_rules = list(WipRefHotLotRule.objects.filter(is_active=True).order_by('sort_no', 'id'))
 
-        rows = list(WipReportLotPath.objects.filter(lot_type__in=lot_types).values(*WIP_FIELDS)[:4000])
+        all_rows = list(WipReportLotPath.objects.values(*BASE_FIELDS)[:5000])
+        lot_type_options = sorted({r.get('lot_type') for r in all_rows if r.get('lot_type')})
+        lot_types = requested_lot_types or ['PP']
+        rows = [r for r in all_rows if (r.get('lot_type') in lot_types)]
+
         by_lot = {}
         for r in rows:
             lot = (r.get('lot_id') or '').strip()
-            if lot and lot not in by_lot: by_lot[lot] = r
+            if lot and lot not in by_lot:
+                by_lot[lot] = r
         uniq_rows = list(by_lot.values())
 
         by_layer_status = defaultdict(lambda: defaultdict(float))
         for r in rows:
             by_layer_status[str(r.get('layer_id') or '-')][r.get('status') or '-'] += _to_num(r.get('cur_qty'))
         labels = sorted(by_layer_status.keys(), key=lambda x: (len(x), x))
-        lot_balance = {"labels": labels, "datasets": [{"label": s, "data": [int(by_layer_status[l].get(s, 0)) for l in labels], "backgroundColor": STATUS_COLOR.get(s, '#999')} for s in STATUS_ORDER]}
+        lot_balance = {'labels': labels, 'datasets': [{'label': s, 'data': [int(by_layer_status[l].get(s, 0)) for l in labels], 'backgroundColor': STATUS_COLOR.get(s, '#999')} for s in STATUS_ORDER]}
 
         issue_acc = defaultdict(lambda: {'qty': 0.0, 'lots': set(), 'category': '', 'issue': '', 'status': '', 'need_check': ''})
+        ex_group = defaultdict(lambda: {'qty': 0.0, 'lots': set(), 'elapsed': [], 'reasons': []})
         for r in uniq_rows:
             qty = _to_num(r.get('cur_qty')); lot = r.get('lot_id') or ''
-            for i in parse_issue_eqp(r.get('issue_eqp') or ''):
-                k = ('설비이슈', i['eqp'], i['status']); a = issue_acc[k]; a.update({'category': '설비이슈', 'issue': i['eqp'], 'status': f"{i['status']}({i['days']}일↑)", 'need_check': area_from_eqp(i['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
+            for i in _parse_issue_eqp_blocks(r.get('issue_eqp') or ''):
+                k = ('설비이슈', i['eqp'], i['status'])
+                a = issue_acc[k]; a.update({'category': '설비이슈', 'issue': i['eqp'], 'status': f"{i['status']}({i['days']:.1f}일↑)", 'need_check': area_from_eqp(i['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
             for p in parse_prevent(r.get('prevent') or ''):
-                k = ('TIP', p['eqp'], 'PREVENT'); a = issue_acc[k]; a.update({'category': 'TIP', 'issue': p['eqp'], 'status': f"PREVENT({p['days']}일↑)", 'need_check': area_from_eqp(p['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
+                k = ('TIP', p['eqp'], 'PREVENT')
+                a = issue_acc[k]; a.update({'category': 'TIP', 'issue': p['eqp'], 'status': f"PREVENT({_to_num(p['days']):.1f}일↑)", 'need_check': area_from_eqp(p['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
             for d in _parse_exclusion_details(r.get('exclusion_type') or ''):
-                issue = f"{r.get('proc_id') or '-'} / {r.get('layer_id') or '-'} / {r.get('step_seq') or '-'}"
-                k = ('EXCLUSION', issue, d['kind']); a = issue_acc[k]; a.update({'category': 'EXCLUSION', 'issue': issue, 'status': f"{d['kind']}({d['elapsed']:.1f}일↑)", 'need_check': _reason_summary(d['reason'])}); a['qty'] += qty; a['lots'].add(lot)
+                cat = _reason_summary(d['reason'])
+                gk = (r.get('proc_id') or '-', r.get('layer_id') or '-', r.get('step_seq') or '-', d['kind'], cat)
+                ex_group[gk]['qty'] += qty; ex_group[gk]['lots'].add(lot); ex_group[gk]['elapsed'].append(d['elapsed']); ex_group[gk]['reasons'].append(cat)
+
+        for (proc, layer, step, kind, cat), v in sorted(ex_group.items(), key=lambda kv: (kv[1]['qty'], len(kv[1]['lots'])), reverse=True)[:20]:
+            key = ('EXCLUSION', proc, layer, step, kind, cat)
+            a = issue_acc[key]
+            a.update({'category': 'EXCLUSION', 'issue': f'PROC {proc} / Layer {layer} / Step {step} / {cat}', 'status': f"{kind}({(sum(v['elapsed'])/len(v['elapsed'])) if v['elapsed'] else 0:.1f}일↑)", 'need_check': cat})
+            a['qty'] += v['qty']; a['lots'] = set(v['lots'])
+
         issue_rows = [{**v, 'qty_text': f"{int(v['qty'])}매({len(v['lots'])}Lot)"} for v in issue_acc.values()]
         issue_rows.sort(key=lambda x: x['qty'], reverse=True)
 
         wip_rows = []
         for r in uniq_rows[:page_size]:
-            item = {k: r.get(k) for k in WIP_FIELDS if k not in {'issue_eqp', 'prevent', 'exclusion_type', 'lot_inform', 'grade'}}
+            item = {k: r.get(k) for k in BASE_FIELDS}
             item['product'] = classify_product(r.get('lot_id'), product_rules)
             item['module'] = classify_module(item['product'], r.get('layer_id'), r.get('step_seq'), module_rules)
             item['hot_type'] = classify_hot_lot(r.get('grade'), r.get('lot_inform'), hot_rules)
             wip_rows.append(item)
 
-        move_rows = list(reversed(list(WipMoveGroup.objects.values('report_date', 'move').order_by('-report_date')[:60])))
-        idx_labels = [str(m['report_date']) for m in move_rows]
-        move_data = [_to_num(m['move']) for m in move_rows]
-        total_qty = sum(_to_num(r.get('cur_qty')) for r in uniq_rows) or 1
-        hold_qty = sum(_to_num(r.get('cur_qty')) for r in uniq_rows if (r.get('status') or '') == 'HOLD')
-        blocked_qty = sum(_to_num(r.get('cur_qty')) for r in uniq_rows if (r.get('status') or '') == 'WAIT(진행불가)')
-        wait_qty = sum(_to_num(r.get('cur_qty')) for r in uniq_rows if (r.get('status') or '') == 'WAIT')
-        idx_len = len(idx_labels)
-        index_chart = {"labels": idx_labels, "datasets": [{"type": "bar", "label": "move", "data": move_data, "yAxisID": "y"}, {"type": "line", "label": "w/t", "data": [round(wait_qty / total_qty * 100, 2)] * idx_len, "yAxisID": "y1"}, {"type": "line", "label": "hold율[%]", "data": [round(hold_qty / total_qty * 100, 2)] * idx_len, "yAxisID": "y1"}, {"type": "line", "label": "hold+WAIT진행불가율[%]", "data": [round((hold_qty + blocked_qty) / total_qty * 100, 2)] * idx_len, "yAxisID": "y1"}]}
+        base_date = _to_date(get_latest_loaded_at()) or date.today()
+        move_rows = list(WipMoveGroup.objects.filter(lot_type__in=MOVE_LOT_TYPES).values('y', 'm', 'w', 'report_date', 'move'))
+        by_date_move = defaultdict(float)
+        by_month_days = defaultdict(list)
+        by_week_days = defaultdict(list)
+        for r in move_rows:
+            rd = _to_date(r.get('report_date'))
+            if not rd:
+                continue
+            by_date_move[rd] += _to_num(r.get('move'))
+            by_month_days[(rd.year, rd.month)].append(rd)
+            by_week_days[(rd.isocalendar().year, rd.isocalendar().week)].append(rd)
 
-        out = {'ok': True, 'latest_loaded_at': get_latest_loaded_at(), 'message': '', 'filters': {'lot_type': sorted({x['lot_type'] for x in rows if x.get('lot_type')}) or ['PP'], 'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in rows if x.get('lot_id')}), 'proc_id': sorted({x['proc_id'] for x in rows if x.get('proc_id')}), 'issue_category': ['설비이슈', 'TIP', 'EXCLUSION'], 'need_check': ['PHOTO', 'METRO', 'METAL', 'CMP', 'CLN', 'CVD', 'IMP', 'DIFF', '미정']}, 'summary_sections': _build_summary_sections(uniq_rows), 'lot_balance': lot_balance, 'index_chart': index_chart, 'issue_rows': issue_rows[:200], 'wip_rows': wip_rows, 'pagination': {'page': 1, 'page_size': page_size, 'total': len(uniq_rows)}}
+        labels, move_data = [], []
+        for i in range(2, -1, -1):
+            d = base_date.replace(day=1)
+            m = d.month - i
+            y = d.year
+            while m <= 0:
+                m += 12; y -= 1
+            days = sorted(set(by_month_days.get((y, m), [])))
+            avg = sum(by_date_move[x] for x in days) / len(days) if days else None
+            labels.append(f'{m}월'); move_data.append(round(avg, 2) if avg is not None else None)
+        for i in range(3, -1, -1):
+            wd = base_date - timedelta(days=7 * i)
+            yw = (wd.isocalendar().year, wd.isocalendar().week)
+            days = sorted(set(by_week_days.get(yw, [])))
+            avg = sum(by_date_move[x] for x in days) / len(days) if days else None
+            labels.append(f'W{yw[1]}'); move_data.append(round(avg, 2) if avg is not None else None)
+        for i in range(6, -1, -1):
+            d = base_date - timedelta(days=i)
+            labels.append(f'{d.month}/{d.day}')
+            move_data.append(round(by_date_move.get(d, 0.0), 2) if d in by_date_move else None)
+
+        latest_qty_rows = [r for r in all_rows if r.get('lot_type') in MOVE_LOT_TYPES]
+        total_qty = sum(_to_num(r.get('cur_qty')) for r in latest_qty_rows) or 0
+        hold_qty = sum(_to_num(r.get('cur_qty')) for r in latest_qty_rows if r.get('status') == 'HOLD')
+        blocked_qty = sum(_to_num(r.get('cur_qty')) for r in latest_qty_rows if r.get('status') in ('HOLD', 'WAIT(진행불가)'))
+        latest_move = by_date_move.get(base_date)
+        wt = (latest_move / total_qty * 100) if latest_move is not None and total_qty > 0 else None
+        hold_rate = (hold_qty / total_qty * 100) if total_qty > 0 else None
+        blocked_rate = (blocked_qty / total_qty * 100) if total_qty > 0 else None
+        ratios = [None] * len(labels)
+        if labels:
+            ratios[-1] = round(wt, 2) if wt is not None else None
+        hold_arr = [None] * len(labels)
+        blocked_arr = [None] * len(labels)
+        if labels and hold_rate is not None:
+            hold_arr[-1] = round(hold_rate, 2)
+            blocked_arr[-1] = round(blocked_rate, 2)
+
+        index_chart = {'labels': labels, 'datasets': [
+            {'type': 'bar', 'label': 'move', 'data': move_data, 'yAxisID': 'y'},
+            {'type': 'line', 'label': 'w/t', 'data': ratios, 'yAxisID': 'y1'},
+            {'type': 'line', 'label': 'hold율[%]', 'data': hold_arr, 'yAxisID': 'y1'},
+            {'type': 'line', 'label': 'hold+WAIT진행불가율[%]', 'data': blocked_arr, 'yAxisID': 'y1'},
+        ]}
+        logger.info('[wip] index_chart labels=%s', len(labels))
+        logger.info('[wip] lot_type options count=%s', len(lot_type_options))
+        logger.info('[wip] wip_rows column count=%s', len(wip_rows[0].keys()) if wip_rows else 0)
+
+        out = {'ok': True, 'latest_loaded_at': get_latest_loaded_at(), 'message': '', 'filters': {'lot_type': lot_type_options or ['PP'], 'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in all_rows if x.get('lot_id')}), 'proc_id': sorted({x['proc_id'] for x in all_rows if x.get('proc_id')}), 'issue_category': ['설비이슈', 'TIP', 'EXCLUSION'], 'need_check': ['PHOTO', 'METRO', 'METAL', 'CMP', 'CLN', 'CVD', 'IMP', 'DIFF', '미정']}, 'summary_sections': _build_summary_sections(uniq_rows), 'lot_balance': lot_balance, 'index_chart': index_chart, 'issue_rows': issue_rows[:200], 'wip_rows': wip_rows, 'pagination': {'page': 1, 'page_size': page_size, 'total': len(uniq_rows)}}
         return make_json_safe(out)
     except Exception as exc:
         logger.exception('[summary-data 오류] %s: %s', exc.__class__.__name__, exc)
