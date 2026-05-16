@@ -194,6 +194,39 @@ def normalize_join_key(series: pd.Series, *, numeric_normalize: bool = False) ->
     return out
 
 
+
+
+def validate_issue_eqp_format(value: object) -> bool:
+    if is_blank(value):
+        return True
+    text = str(value).strip()
+    if not text:
+        return True
+
+    allowed_labels = ("DOWN", "PM", "LOCAL")
+    item_pattern = re.compile(r"^.+\((?:\d+(?:\.\d+)?일↑|경과일계산불가)\)$")
+
+    blocks = [blk.strip() for blk in text.split(" / ") if blk.strip()]
+    if not blocks:
+        return True
+
+    for block in blocks:
+        if ":" not in block:
+            return False
+        label, items_part = block.split(":", 1)
+        if label.strip() not in allowed_labels:
+            return False
+        items_part = items_part.strip()
+        if not items_part:
+            return False
+
+        items = [item.strip() for item in items_part.split(",") if item.strip()]
+        if not items:
+            return False
+        if any(item_pattern.match(item) is None for item in items):
+            return False
+
+    return True
 def _build_encoding_order(signature: bytes) -> list[str]:
     if signature.startswith(b"\xff\xfe"):
         preferred = ["utf-16", "utf-16-le"]
@@ -1548,10 +1581,14 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         if invalid:
             raise WipBuildError("prevent 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
     if "issue_eqp" in base.columns:
-        tokens = base["issue_eqp"].dropna().astype(str).str.replace(r"(DOWN|PM|LOCAL):\s*", "", regex=True).str.replace(" / ", ", ")
-        invalid_issue = tokens.str.split(", ").apply(lambda arr: any(pd.notna(x) and not re.match(label_pattern, x) for x in arr)).any()
-        if invalid_issue:
-            raise WipBuildError("issue_eqp 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+        issue_target_rows = int(base["issue_eqp"].map(lambda v: not is_blank(v)).sum())
+        bad_issue_mask = ~base["issue_eqp"].apply(validate_issue_eqp_format)
+        bad_issue_rows = int(bad_issue_mask.sum())
+        print(f"[concat 검증] issue_eqp 형식 점검 대상 rows: {issue_target_rows}")
+        print(f"[concat 검증] issue_eqp 형식 오류 rows: {bad_issue_rows}")
+        if bad_issue_rows > 0:
+            raise WipBuildError("issue_eqp 형식 오류가 있습니다. DOWN/PM/LOCAL 블록 안의 각 item은 설비명(n.n일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+        print("[concat 검증] issue_eqp 형식 점검 완료")
     if "exclusion_type" in base.columns:
         ex_tokens_ok = base["exclusion_type"].dropna().astype(str).apply(
             lambda txt: all(
