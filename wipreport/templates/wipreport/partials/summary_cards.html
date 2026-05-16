@@ -1,10 +1,10 @@
 <section class="wip-summary-grid">
-  <div class="wip-summary-left wip-card"><div class="wip-card-header">요약</div><div class="wip-card-body" id="summary-text"></div></div>
+  <div class="wip-summary-left wip-card wip-summary-card"><div class="wip-card-header">요약</div><div class="wip-card-body" id="summary-text"></div></div>
   <div class="wip-summary-right">
-    <div class="wip-card"><div class="wip-card-header">Lot Balance</div><div class="wip-card-body wip-chart-box"><canvas id="lot-balance-chart"></canvas><div class="wip-empty" id="lot-balance-empty"></div></div></div>
-    <div class="wip-card"><div class="wip-card-header">지수</div><div class="wip-card-body wip-chart-box"><canvas id="index-chart"></canvas><div class="wip-empty" id="index-empty"></div></div></div>
-    <div class="wip-card"><div class="wip-card-header">초HOT</div><div class="wip-card-body" id="hot-box"></div></div>
+    <div class="wip-card wip-chart-card"><div class="wip-card-header">Lot Balance</div><div class="wip-card-body"><div class="wip-chart-box"><canvas id="lotBalanceChart"></canvas><div class="wip-empty" id="lotBalanceEmpty" hidden>표시할 Lot Balance 데이터가 없습니다.</div></div></div></div>
+    <div class="wip-card wip-chart-card"><div class="wip-card-header">지수</div><div class="wip-card-body"><div class="wip-index-chart-box"><canvas id="indexChart"></canvas><div class="wip-empty" id="indexEmpty" hidden>계산 가능한 지수 데이터가 없습니다.</div></div></div></div>
+    <div class="wip-card wip-hot-card"><div class="wip-card-header">초HOT</div><div class="wip-card-body" id="hot-box"></div></div>
   </div>
 </section>
-<section class="wip-card"><div class="wip-card-header">이슈 정리</div><div class="wip-card-body"><div class="wip-filter-grid" id="issue-filters"></div><div class="wip-toolbar"><button class="wip-btn wip-btn-secondary" type="button" id="btn-issue-filter">적용</button></div><div class="wip-table-scroll"><table class="wip-table" id="issue-table"></table></div></div></section>
-<section class="wip-card"><div class="wip-card-header">재공정보</div><div class="wip-card-body wip-table-scroll"><table class="wip-table" id="wip-table"></table></div></section>
+<section class="wip-card wip-issue-card"><div class="wip-card-header">이슈 정리</div><div class="wip-card-body"><div class="wip-filter-grid" id="issue-filters"></div><div class="wip-toolbar"><button class="wip-btn wip-btn-secondary" type="button" id="btn-issue-filter">적용</button></div><div class="wip-table-scroll"><table class="wip-table" id="issue-table"></table></div></div></section>
+<section class="wip-card wip-wip-table-card"><div class="wip-card-header">재공정보</div><div class="wip-card-body"><div class="wip-table-scroll wip-wip-table-scroll"><table class="wip-table wip-data-table" id="wip-table"></table></div></div></section>

@@ -13,22 +13,25 @@ PROC_ID
 선택
 조회
 요약
-[B/N] 병목 후보 Top 5 (*문제점: 각 값들이 뭔데? 140이 뭔데? layer잖아 그런 표시도 없고 step b1140130 이게 뭔데? 컬럼명과 내용 사이에 :같은 구분자를 넣을 생각도 알아서 유연하게 못하나? proc_id는 왜 표시안하지? 엄연히 각 재공들이 서로 다른 plan으로 흘러가고 있는데 구분이 필요하다. 
-140 / STEP B1140130: 49매(4Lot), WAIT 45매, HOLD 4매, WAIT(진행불가) 0매
-150 / STEP B1150110: 46매(3Lot), WAIT 0매, HOLD 26매, WAIT(진행불가) 20매
-151 / STEP B2151110: 41매(3Lot), WAIT 40매, HOLD 1매, WAIT(진행불가) 0매
-196 / STEP B4196110: 20매(1Lot), WAIT 20매, HOLD 0매, WAIT(진행불가) 0매
-193 / STEP B2193030: 20매(1Lot), WAIT 0매, HOLD 0매, WAIT(진행불가) 20매
-[설비이슈] 설비 이슈 Top 5 (*설비 이슈 실제로 있다. wip_report_lotpath 테이블의 issue_eqp를 참조해라.)
+[B/N] 병목 후보 Top 5
+PROC: K4B1 / Layer: 140 / Step: B1140130 | 대기성 재공: 49매(4Lot) = WAIT 45매 + HOLD 4매 + WAIT(진행불가) 0매
+PROC: K4B1 / Layer: 150 / Step: B1150110 | 대기성 재공: 46매(3Lot) = WAIT 0매 + HOLD 26매 + WAIT(진행불가) 20매
+PROC: K4B2 / Layer: 151 / Step: B2151110 | 대기성 재공: 41매(3Lot) = WAIT 40매 + HOLD 1매 + WAIT(진행불가) 0매
+PROC: K4B4 / Layer: 196 / Step: B4196110 | 대기성 재공: 20매(1Lot) = WAIT 20매 + HOLD 0매 + WAIT(진행불가) 0매
+PROC: K4B2 / Layer: 193 / Step: B2193030 | 대기성 재공: 20매(1Lot) = WAIT 0매 + HOLD 0매 + WAIT(진행불가) 20매
+현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/140/B1140130) 이슈로 진입 제한 가능성이 있습니다.
+현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/150/B1150110) 이슈로 진입 제한 가능성이 있습니다.
+현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/150/B1150110) 이슈로 진입 제한 가능성이 있습니다.
+[설비이슈] 설비 이슈 Top 5
 해당 이슈 없음
 [TIP] Prevent Top 5
-ETODC03-1: PREVENT(5.1일↑), 46매(3Lot)
-[EXCLUSION] HOLD/FTP/예약제외 Top 5 (*장난하냐? ai처럼 요약하는게 그냥 사유 몇건, 몇매 이 수준이 다인가? exclusion_type 내부의 내용을 토대로 공통점을 확인해서 proc_id마다 어떤 문제가 있는지 확인해야할거아냐. exclusion_type 내용을 통틀어봐도 '~진행금지', '~FLOW금지' 혹은 '-' 정도로 대충 적혀있으면 상세사유 없이 hold만 시켜둠. 사유 상세 기입 필요 등과 같은 내용을 적어도 좋을 것이고, 경과일도 있는데 평균경과일이 특별히 긴 layer나 stepseq가 있다면 그 부분에 정체된 무슨 이슈가 있단 것이니 문제삼을 수도 있을 것 아냐. 제대로 정리 요약 되도록해라. 이 요약만 봐도 현재 재공들에 어떤 문제가 있는지 확인할 수 있도록.
-150 / STEP B1150110: 사유 2건, 26매(2Lot)
-193 / STEP B2193030: 사유 1건, 20매(1Lot)
-140 / STEP B3140130: 사유 1건, 20매(1Lot)
-192 / STEP B1192030: 사유 1건, 19매(1Lot)
-280 / STEP B1280060: 사유 2건, 12매(2Lot)
+EQP: ETODC03-1 / 상태: PREVENT / 경과: 5.1일↑ | 대기성 재공: 46매(3Lot)
+[EXCLUSION] HOLD/FTP/예약제외 Top 5
+PROC: K4B1 / Layer: 150 / Step: B1150110 | 26매(2Lot), 대표 사유: 24070493_이재성, 평균 경과: 0.0일↑
+PROC: K4B2 / Layer: 193 / Step: B2193030 | 20매(1Lot), 대표 사유: WORKmgr, 평균 경과: 0.0일↑
+PROC: K4B3 / Layer: 140 / Step: B3140130 | 20매(1Lot), 대표 사유: 22075883_이지섭, 평균 경과: 0.0일↑
+PROC: K4B1 / Layer: 192 / Step: B1192030 | 19매(1Lot), 대표 사유: WORKmgr, 평균 경과: 0.0일↑
+PROC: K4B1 / Layer: 280 / Step: B1280060 | 15매(2Lot), 대표 사유: SORTmgr, 평균 경과: 0.0일↑
 Lot Balance
 지수
 초HOT
@@ -42,7 +45,9 @@ Lot Balance
 대분류	ISSUE	STATUS	대기재공	확인필요
 TIP	
 ETODC03-1
-PREVENT(5.1일↑)	46매(3Lot)	미정
-재공정보(*내용 지움)
-lot_id	product	module	proc_id	status	cur_qty	layer_id	step_seq	hot_type
+PREVENT(5.1일↑)	46매(3Lot)	
+미정
+EXCLUSION	
+
+
 
