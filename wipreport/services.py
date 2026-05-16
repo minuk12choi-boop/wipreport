@@ -1,13 +1,29 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 import logging
 
 from django.conf import settings
-from django.db import DatabaseError
-from django.db.models import Max
+from django.db import connection
+from django.db.models import Model, QuerySet
 
-from .models import WipMoveGroup, WipRefExclusionTypeRule, WipRefHotLotRule, WipRefModuleRule, WipRefProductRule, WipReportLotPath
-from .ref_services import area_from_eqp, classify_exclusion_type, classify_hot_lot, classify_module, classify_product, parse_issue_eqp, parse_prevent
+from .models import (
+    WipMoveGroup,
+    WipRefExclusionTypeRule,
+    WipRefHotLotRule,
+    WipRefModuleRule,
+    WipRefProductRule,
+    WipReportLotPath,
+)
+from .ref_services import (
+    area_from_eqp,
+    classify_exclusion_type,
+    classify_hot_lot,
+    classify_module,
+    classify_product,
+    parse_issue_eqp,
+    parse_prevent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +32,48 @@ WIP_FIELDS = ["lot_id", "status", "cur_qty", "lot_type", "proc_id", "layer_id", 
 
 def get_latest_loaded_at():
     try:
-        val = WipReportLotPath.objects.aggregate(v=Max('loaded_at')).get('v')
-        return val.strftime('%Y-%m-%d %H:%M:%S') if val else '-'
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT MAX(`loaded_at`) FROM `wip_report_lotpath`")
+            row = cursor.fetchone()
+        return row[0] if row and row[0] else '-'
     except Exception as exc:
         logger.exception('[latest_loaded_at 오류] %s: %s', exc.__class__.__name__, exc)
         return '-'
 
 
 def _to_num(v):
-    try: return float(v or 0)
-    except Exception: return 0.0
+    try:
+        return float(v or 0)
+    except Exception:
+        return 0.0
+
+
+def make_json_safe(value):
+    if isinstance(value, dict):
+        return {str(k): make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, QuerySet):
+        return [make_json_safe(v) for v in value]
+    if isinstance(value, (list, tuple)):
+        return [make_json_safe(v) for v in value]
+    if isinstance(value, set):
+        return [make_json_safe(v) for v in sorted(value, key=lambda x: str(x))]
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Model):
+        return str(value)
+    if hasattr(value, 'item'):
+        try:
+            return value.item()
+        except Exception:
+            return str(value)
+    if hasattr(value, 'tolist'):
+        try:
+            return value.tolist()
+        except Exception:
+            return str(value)
+    return value
 
 
 def build_summary(params):
@@ -53,7 +101,8 @@ def build_summary(params):
         layer_seen = set()
         for r in rows:
             key = ((r.get('lot_id') or ''), (r.get('layer_id') or ''), (r.get('status') or ''))
-            if key in layer_seen: continue
+            if key in layer_seen:
+                continue
             layer_seen.add(key)
             lot_balance[r.get('layer_id') or '-'][r.get('status') or '-'] += _to_num(r.get('cur_qty'))
 
@@ -63,14 +112,23 @@ def build_summary(params):
             lot = r.get('lot_id') or ''
             for i in parse_issue_eqp(r.get('issue_eqp') or ''):
                 k = ('설비이슈', i['eqp'], i['status'])
-                a = issue_acc[k]; a.update({'category': '설비이슈', 'issue': i['eqp'], 'status': f"{i['status']}({i['days']}일↑)", 'need_check': area_from_eqp(i['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
+                a = issue_acc[k]
+                a.update({'category': '설비이슈', 'issue': i['eqp'], 'status': f"{i['status']}({i['days']}일↑)", 'need_check': area_from_eqp(i['eqp'])})
+                a['qty'] += qty
+                a['lots'].add(lot)
             for p in parse_prevent(r.get('prevent') or ''):
                 k = ('TIP', p['eqp'], 'PREVENT')
-                a = issue_acc[k]; a.update({'category': 'TIP', 'issue': p['eqp'], 'status': f"PREVENT({p['days']}일↑)", 'need_check': area_from_eqp(p['eqp'])}); a['qty'] += qty; a['lots'].add(lot)
+                a = issue_acc[k]
+                a.update({'category': 'TIP', 'issue': p['eqp'], 'status': f"PREVENT({p['days']}일↑)", 'need_check': area_from_eqp(p['eqp'])})
+                a['qty'] += qty
+                a['lots'].add(lot)
             ex_type = classify_exclusion_type(r.get('exclusion_type') or '', ex_rules)
             if ex_type:
                 k = ('EXCLUSION', ex_type, '미정')
-                a = issue_acc[k]; a.update({'category': 'EXCLUSION', 'issue': ex_type, 'status': '미정', 'need_check': '미정'}); a['qty'] += qty; a['lots'].add(lot)
+                a = issue_acc[k]
+                a.update({'category': 'EXCLUSION', 'issue': ex_type, 'status': '미정', 'need_check': '미정'})
+                a['qty'] += qty
+                a['lots'].add(lot)
 
         issue_rows = [{**v, 'qty_text': f"{int(v['qty'])}매({len(v['lots'])}Lot)"} for v in issue_acc.values()]
         issue_rows.sort(key=lambda x: x['qty'], reverse=True)
@@ -87,26 +145,39 @@ def build_summary(params):
         labels = [m['report_date'] for m in reversed(move_rows)]
         moves = [_to_num(m['move']) for m in reversed(move_rows)]
 
-        return {
+        out = {
             'ok': True,
             'latest_loaded_at': get_latest_loaded_at(),
+            'message': '',
             'filters': {
                 'lot_type': sorted({x['lot_type'] for x in rows if x.get('lot_type')}) or ['PP'],
-                'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in rows}),
+                'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in rows if classify_product(x.get('lot_id'), product_rules)}),
                 'proc_id': sorted({x['proc_id'] for x in rows if x.get('proc_id')}),
                 'issue_category': ['설비이슈', 'TIP', 'EXCLUSION'],
                 'need_check': ['PHOTO', 'METRO', 'METAL', 'CMP', 'CLN', 'CVD', 'IMP', 'DIFF', '미정'],
             },
             'summary_text': [f"총 LOT: {len(uniq_rows)}", f"총 재공수량: {int(sum(_to_num(r.get('cur_qty')) for r in uniq_rows))}매", f"LOT TYPE: {', '.join(lot_types)}"],
-            'lot_balance': {k: dict(v) for k, v in lot_balance.items()},
-            'index_chart': {'labels': labels, 'move': moves, 'wt': [None]*len(labels), 'hold_rate': [None]*len(labels), 'hold_wait_rate': [None]*len(labels), 'periods': {'3m': labels[-90:], '4w': labels[-28:], '7d': labels[-7:]}},
+            'lot_balance': {'labels': [], 'datasets': [], 'by_layer_status': {k: dict(v) for k, v in lot_balance.items()}},
+            'index_chart': {'labels': labels, 'datasets': [{'label': 'MOVE', 'data': moves}]},
             'issue_rows': issue_rows[:200],
             'wip_rows': wip_rows,
             'pagination': {'page': 1, 'page_size': page_size, 'total': len(uniq_rows)},
         }
+        return make_json_safe(out)
     except Exception as exc:
         logger.exception('[summary-data 오류] %s: %s', exc.__class__.__name__, exc)
-        out = {'ok': False, 'error': '요약 데이터 조회 중 오류가 발생했습니다.', 'latest_loaded_at': get_latest_loaded_at()}
+        out = {
+            'ok': False,
+            'message': 'Summary 데이터 조회 중 오류가 발생했습니다.',
+            'latest_loaded_at': get_latest_loaded_at(),
+            'filters': {'lot_type': [], 'product': [], 'proc_id': [], 'issue_category': [], 'need_check': []},
+            'summary_text': [],
+            'lot_balance': {'labels': [], 'datasets': []},
+            'index_chart': {'labels': [], 'datasets': []},
+            'issue_rows': [],
+            'wip_rows': [],
+            'pagination': {'page': 1, 'page_size': 100, 'total': 0},
+        }
         if settings.DEBUG:
             out['error_detail'] = f'{exc.__class__.__name__}: {exc}'
-        return out
+        return make_json_safe(out)

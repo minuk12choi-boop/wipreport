@@ -40,7 +40,7 @@ class WipReportLotPath(models.Model):
     step_arrive_date = models.TextField(null=True, blank=True)
     last_event_date = models.TextField(null=True, blank=True)
     exclusion_type = models.TextField(null=True, blank=True)
-    loaded_at = models.DateTimeField(null=True, blank=True)
+    loaded_at = models.TextField(null=True, blank=True)
     loaded_id = models.TextField(null=True, blank=True)
     class Meta:
         managed = False
@@ -54,7 +54,7 @@ class WipMove(models.Model):
     process_id = models.TextField(null=True, blank=True)
     step_seq = models.TextField(null=True, blank=True)
     tkout_date = models.TextField(null=True, blank=True)
-    loaded_at = models.DateTimeField(null=True, blank=True)
+    loaded_at = models.TextField(null=True, blank=True)
     loaded_id = models.TextField(null=True, blank=True)
     class Meta:
         managed = False
@@ -68,7 +68,7 @@ class WipMoveGroup(models.Model):
     lot_id = models.TextField(null=True, blank=True)
     lot_type = models.TextField(null=True, blank=True)
     move = models.FloatField(null=True, blank=True)
-    loaded_at = models.DateTimeField(null=True, blank=True)
+    loaded_at = models.TextField(null=True, blank=True)
     loaded_id = models.TextField(null=True, blank=True)
     class Meta:
         managed = False
