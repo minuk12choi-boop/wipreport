@@ -1,1 +1,5 @@
-<div class='card'><h3>⑦~⑩ 기준정보</h3><p>행 추가/삭제/저장은 JS로 처리</p><button id='btn-save-product'>제품구분자 저장</button><button id='btn-save-module'>모듈 저장</button><button id='btn-save-exclusion'>HOLD유형 저장</button><button id='btn-save-hot'>초HOT 저장</button></div>
+<div class="wip-ref-grid">
+{% for key,title in [('product','제품구분자 설정'),('module','모듈 설정'),('exclusion','HOLD유형 설정'),('hot','초HOT 기준 설정')] %}
+<section class="wip-ref-card" data-ref-table="{{ key }}"><div class="wip-card-header card-header-row"><div>{{ title }}</div><div class="wip-toolbar"><button type="button" class="wip-btn wip-btn-secondary add-row">행 추가</button><button type="button" class="wip-btn wip-btn-secondary del-row">선택 삭제</button><button type="button" class="wip-btn wip-btn-primary save-row">저장</button></div></div><div class="wip-card-body wip-table-scroll"><table class="wip-ref-table wip-table"><thead></thead><tbody></tbody></table></div></section>
+{% endfor %}
+</div>

@@ -1,13 +1,6 @@
 {% extends 'wipreport/base.html' %}
 {% block content %}
-<section>
-  {% if ref_error_message %}
-    <div class='alert warning'>{{ ref_error_message }}</div>
-  {% endif %}
-  {% include 'wipreport/partials/ref_tables.html' %}
-</section>
-<script>
-window.REF_INIT={product:{{ product_rules|length }},module:{{ module_rules|length }},exclusion:{{ exclusion_rules|length }},hot:{{ hot_rules|length }}};
-</script>
-<script src='/static/wipreport/js/wipreport_ref.js'></script>
+{% if ref_error_message %}<div class="wip-alert">{{ ref_error_message }}</div>{% endif %}
+{% include 'wipreport/partials/ref_tables.html' %}
+<script src="/static/wipreport/js/wipreport_ref.js"></script>
 {% endblock %}
