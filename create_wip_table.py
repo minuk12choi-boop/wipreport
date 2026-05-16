@@ -380,9 +380,49 @@ def _to_datetime_value(value) -> pd.Timestamp | pd.NaT:
     return pd.to_datetime(value, errors="coerce")
 
 
+def to_single_datetime(value) -> pd.Timestamp | pd.NaT:
+    if isinstance(value, pd.Series):
+        candidates = [to_single_datetime(v) for v in value.tolist()]
+        valid = [dt for dt in candidates if pd.notna(dt)]
+        return min(valid) if valid else pd.NaT
+    if isinstance(value, (pd.Timestamp,)):
+        return value if pd.notna(value) else pd.NaT
+    if value is None or is_blank(value):
+        return pd.NaT
+    if hasattr(value, "year") and hasattr(value, "month") and hasattr(value, "day"):
+        parsed = pd.to_datetime(value, errors="coerce")
+        return parsed if pd.notna(parsed) else pd.NaT
+
+    text = str(value).strip()
+    if not text:
+        return pd.NaT
+    parts = [p.strip() for p in re.split(r"[,\n]+", text) if p.strip()]
+    if not parts:
+        parts = [text]
+
+    parsed_list: list[pd.Timestamp] = []
+    for part in parts:
+        dt = _parse_single_datetime(part)
+        if pd.notna(dt):
+            parsed_list.append(dt)
+    if parsed_list:
+        return min(parsed_list)
+    dt = _parse_single_datetime(text)
+    return dt if pd.notna(dt) else pd.NaT
+
+
+def elapsed_days_text(sysdate_value, target_value) -> str:
+    sys_dt = to_single_datetime(sysdate_value)
+    target_dt = to_single_datetime(target_value)
+    if pd.isna(sys_dt) or pd.isna(target_dt):
+        return "경과일계산불가"
+    days = (sys_dt - target_dt).total_seconds() / 86400.0
+    return f"{days:.1f}일↑"
+
+
 def _elapsed_days_float(sysdate, target_date) -> float | pd.NA:
-    sys_dt = _to_datetime_value(sysdate)
-    tar_dt = _to_datetime_value(target_date)
+    sys_dt = to_single_datetime(sysdate)
+    tar_dt = to_single_datetime(target_date)
     if pd.isna(sys_dt) or pd.isna(tar_dt):
         return pd.NA
     return round((sys_dt - tar_dt).total_seconds() / 86400.0, 1)
@@ -393,10 +433,7 @@ def calculate_day_diff(sysdate, target_date) -> float | pd.NA:
 
 
 def format_elapsed_days_label(sysdate, target_date) -> str:
-    diff = calculate_day_diff(sysdate, target_date)
-    if pd.isna(diff):
-        return "경과일계산불가"
-    return f"{diff:.1f}일↑"
+    return elapsed_days_text(sysdate, target_date)
 
 
 def get_older_datetime(a, b):
@@ -430,14 +467,14 @@ def make_issue_items(row: pd.Series) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {k: [] for k in statuses}
     seen = {k: set() for k in statuses}
 
-    issue_ref_time = get_older_datetime(row.get("eqpissuetime"), row.get("eqp_body_status_change_time"))
+    issue_ref_time = get_issue_base_datetime(row)
 
     def add_item(status_raw, eqp_name):
         status = _normalize_text(status_raw).upper()
         eqp = _normalize_text(eqp_name)
         if status not in statuses or not eqp:
             return
-        elapsed = format_elapsed_days_label(row.get("sysdate"), issue_ref_time)
+        elapsed = elapsed_days_text(row.get("sysdate"), issue_ref_time)
         item = f"{eqp}({elapsed})"
         if item not in seen[status]:
             seen[status].add(item)
@@ -447,6 +484,21 @@ def make_issue_items(row: pd.Series) -> dict[str, list[str]]:
     add_item(row.get("body_eqp_status"), row.get("eqp_id"))
     add_item(row.get("tip_cham_eqp_status"), row.get("tip_eqpcham"))
     return out
+
+
+def get_issue_base_datetime(row: pd.Series) -> pd.Timestamp | pd.NaT:
+    candidates: list[pd.Timestamp] = []
+    for col in [
+        "eqpissuetime",
+        "tip_eqpissuetime",
+        "eqp_body_status_change_time",
+        "body_status_change_time",
+        "body_status_change_time_eqp",
+    ]:
+        dt = to_single_datetime(row.get(col))
+        if pd.notna(dt):
+            candidates.append(dt)
+    return min(candidates) if candidates else pd.NaT
 
 
 def _unique_join_text(series: pd.Series) -> str | None:
@@ -1145,21 +1197,6 @@ def build_wip(mcpath: pd.DataFrame, eqp: pd.DataFrame, tip: pd.DataFrame, hold: 
 
 
 def build_exclusion_type(row: pd.Series) -> str | pd.NA:
-    def extract_oldest_datetime(value):
-        if is_blank(value):
-            return pd.NaT
-        text = str(value)
-        parts = [p.strip() for p in text.split(",")] if "," in text else [text.strip()]
-        candidates = []
-        for p in parts:
-            dt = _parse_single_datetime(p)
-            if pd.notna(dt):
-                candidates.append(dt)
-        if not candidates:
-            dt = _parse_single_datetime(text)
-            return dt if pd.notna(dt) else pd.NaT
-        return min(candidates)
-
     def has_value(v) -> bool:
         return not is_blank(v)
 
@@ -1170,8 +1207,7 @@ def build_exclusion_type(row: pd.Series) -> str | pd.NA:
 
         user_text = _normalize_text(user_val)
         reason_text = _normalize_text(reason_val)
-        oldest_dt = extract_oldest_datetime(date_val)
-        elapsed_text = format_elapsed_days_label(sysdate_val, oldest_dt)
+        elapsed_text = elapsed_days_text(sysdate_val, date_val)
 
         parts: list[str] = []
         if user_text:
@@ -1362,11 +1398,7 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     eqp_fallback = safe_to_datetime(issue_target["tip_eqpissuetime"]) if "tip_eqpissuetime" in issue_target.columns else pd.Series(pd.NaT, index=issue_target.index)
     body_primary = safe_to_datetime(issue_target["eqp_body_status_change_time"]) if "eqp_body_status_change_time" in issue_target.columns else pd.Series(pd.NaT, index=issue_target.index)
     body_fb1 = safe_to_datetime(issue_target["body_status_change_time"]) if "body_status_change_time" in issue_target.columns else pd.Series(pd.NaT, index=issue_target.index)
-    body_fb2 = safe_to_datetime(issue_target["body_status_change_time_eqp"]) if "body_status_change_time_eqp" in issue_target.columns else pd.Series(pd.NaT, index=issue_target.index)
-
-    issue_target["_issue_a"] = eqp_primary.combine_first(eqp_fallback)
-    issue_target["_issue_b"] = body_primary.combine_first(body_fb1).combine_first(body_fb2)
-    issue_target["_issue_ref"] = issue_target[["_issue_a", "_issue_b"]].min(axis=1)
+    issue_target["_issue_ref"] = issue_target.apply(get_issue_base_datetime, axis=1)
 
     print(f"[issue_eqp 진단] eqpissuetime primary 사용 가능 rows: {int(eqp_primary.notna().sum())}")
     print(f"[issue_eqp 진단] tip_eqpissuetime fallback 사용 rows: {int((eqp_primary.isna() & eqp_fallback.notna()).sum())}")
@@ -1379,14 +1411,6 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     print(f"[issue_eqp 진단] 경과일계산불가 item 수: {issue_fail}")
     if total_issue_target and ref_ok == 0:
         print("[issue_eqp 경고] 기준일 최종 성공 rows가 0입니다. 원천 시간값 또는 포맷을 확인하세요.")
-
-    work["eqpissuetime"] = safe_to_datetime(work["eqpissuetime"]).combine_first(safe_to_datetime(work["tip_eqpissuetime"]) if "tip_eqpissuetime" in work.columns else pd.Series(pd.NaT, index=work.index)) if "eqpissuetime" in work.columns else (safe_to_datetime(work["tip_eqpissuetime"]) if "tip_eqpissuetime" in work.columns else pd.Series(pd.NaT, index=work.index))
-    body_base = safe_to_datetime(work["eqp_body_status_change_time"]) if "eqp_body_status_change_time" in work.columns else pd.Series(pd.NaT, index=work.index)
-    if "body_status_change_time" in work.columns:
-        body_base = body_base.combine_first(safe_to_datetime(work["body_status_change_time"]))
-    if "body_status_change_time_eqp" in work.columns:
-        body_base = body_base.combine_first(safe_to_datetime(work["body_status_change_time_eqp"]))
-    work["eqp_body_status_change_time"] = body_base
 
     issue_group = {k: [] for k in ["DOWN", "PM", "LOCAL"]}
     for _, grp in work.groupby(group_keys, dropna=False):
@@ -1409,6 +1433,16 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     base["issue_eqp"] = issue_values
     issue_fail_items = int(base["issue_eqp"].astype("string").str.count("경과일계산불가").fillna(0).sum())
     issue_target_items = int(base["issue_eqp"].astype("string").str.count(r"\(").fillna(0).sum())
+    issue_nonempty_rows = int(base["issue_eqp"].map(lambda v: not is_blank(v)).sum())
+    issue_fail_rows = int(base["issue_eqp"].astype("string").str.contains("경과일계산불가", regex=False, na=False).sum())
+    issue_ok_rows = int(base["issue_eqp"].astype("string").str.contains("일↑", regex=False, na=False).sum())
+    mismatch_rows = int((issue_target["_issue_ref"].notna() & issue_target["_sysdate_dt"].notna() & issue_target.apply(lambda r: "경과일계산불가" in ",".join(sum(make_issue_items(r).values(), [])), axis=1)).sum()) if total_issue_target else 0
+    print(f"[issue_eqp 검증] 기준일 성공 row 중 실제 경과일계산불가 item 수: {mismatch_rows}")
+    print(f"[issue_eqp 검증] 실제 issue_eqp non-empty rows: {issue_nonempty_rows}")
+    print(f"[issue_eqp 검증] 실제 issue_eqp 경과일계산불가 포함 rows: {issue_fail_rows}")
+    print(f"[issue_eqp 검증] 실제 issue_eqp 일↑ 포함 rows: {issue_ok_rows}")
+    if total_issue_target > 0 and ref_ok > 0 and issue_ok_rows == 0:
+        print("[issue_eqp 경고] 대상/기준일 성공 row가 있으나 실제 issue_eqp에 일↑가 없습니다.")
     if issue_target_items > 0 and issue_fail_items == issue_target_items:
         print("[issue_eqp 경고] 대상 item이 있으나 경과일계산불가가 전부입니다.")
     print("[concat 검증] issue_eqp 기준일 min(eqpissuetime, eqp_body_status_change_time) 계산 완료")
@@ -1429,15 +1463,29 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     non_empty_exclusion = int(base["exclusion_type"].map(lambda v: not is_blank(v)).sum())
     print("[concat 컬럼정리] exclusion_type 생성 완료")
     print(f"[concat 컬럼정리] exclusion_type non-empty rows: {non_empty_exclusion} / {len(base)}")
-    hold_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)HOLD:\s*\S", regex=True, na=False).sum())
-    ftp_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)FTP:\s*\S", regex=True, na=False).sum())
-    exc_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(^|\n)예약제외:\s*\S", regex=True, na=False).sum())
+    hold_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(?:^|\n)HOLD:\s*\S", regex=True, na=False).sum())
+    ftp_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(?:^|\n)FTP:\s*\S", regex=True, na=False).sum())
+    exc_line_cnt = int(base["exclusion_type"].astype(str).str.contains(r"(?:^|\n)예약제외:\s*\S", regex=True, na=False).sum())
     elapsed_fail_cnt = int(base["exclusion_type"].astype(str).str.contains("경과일계산불가", regex=False, na=False).sum())
+    elapsed_ok_cnt = int(base["exclusion_type"].astype(str).str.contains("일↑", regex=False, na=False).sum())
     print(f"[exclusion_type 진단] HOLD 라인 생성 rows: {hold_line_cnt}")
     print(f"[exclusion_type 진단] FTP 라인 생성 rows: {ftp_line_cnt}")
     print(f"[exclusion_type 진단] 예약제외 라인 생성 rows: {exc_line_cnt}")
     print(f"[exclusion_type 진단] 경과일계산불가 포함 rows: {elapsed_fail_cnt}")
+    date_exists_fail_rows = int(base.apply(lambda r: ((not is_blank(r.get("hold_date")) or not is_blank(r.get("ftp_date")) or not is_blank(r.get("예약제외_date"))) and ("경과일계산불가" in str(r.get("exclusion_type")))), axis=1).sum())
+    print(f"[exclusion_type 검증] 날짜값 존재 row 중 경과일계산불가 rows: {date_exists_fail_rows}")
+    print(f"[exclusion_type 검증] 실제 exclusion_type non-empty rows: {non_empty_exclusion}")
+    print(f"[exclusion_type 검증] 실제 exclusion_type 경과일계산불가 포함 rows: {elapsed_fail_cnt}")
+    print(f"[exclusion_type 검증] 실제 exclusion_type 일↑ 포함 rows: {elapsed_ok_cnt}")
     exclusion_target_rows = int(base[["hold", "ftp", "예약제외"]].apply(lambda r: any(is_o(v) for v in r), axis=1).sum()) if all(c in base.columns for c in ["hold", "ftp", "예약제외"]) else 0
+    exclusion_date_parsed_rows = int(
+        base.apply(
+            lambda r: any(pd.notna(to_single_datetime(r.get(c))) for c in ["hold_date", "ftp_date", "예약제외_date"]),
+            axis=1,
+        ).sum()
+    ) if all(c in base.columns for c in ["hold_date", "ftp_date", "예약제외_date"]) else 0
+    if exclusion_target_rows > 0 and exclusion_date_parsed_rows > 0 and elapsed_ok_cnt == 0:
+        print("[exclusion_type 경고] 대상/날짜 파싱 성공 rows가 있으나 실제 exclusion_type에 일↑가 없습니다.")
     if exclusion_target_rows > 0 and elapsed_fail_cnt == exclusion_target_rows:
         print("[exclusion_type 경고] 대상 rows가 있으나 경과일계산불가 포함 rows가 전부입니다.")
 
@@ -1523,7 +1571,7 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
     if "prevent" in base.columns and base["prevent"].astype(str).str.strip().eq("PREVENT:").any():
         raise WipBuildError("prevent 컬럼에 'PREVENT:'만 존재하는 값이 있습니다.")
     if "issue_eqp" in base.columns:
-        bad_issue = base["issue_eqp"].astype(str).str.contains(r"^(DOWN:|PM:|LOCAL:)\s*$", regex=True, na=False)
+        bad_issue = base["issue_eqp"].astype(str).str.contains(r"^(?:DOWN:|PM:|LOCAL:)\s*$", regex=True, na=False)
         if bad_issue.any():
             raise WipBuildError("issue_eqp 컬럼에 빈 라벨만 존재하는 값이 있습니다.")
     remained = [c for c in drop_cols if c in base.columns]
