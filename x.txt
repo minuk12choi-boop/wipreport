@@ -32,7 +32,7 @@ Series([], Name: count, dtype: int64)
 [hold 집계 점검] hold raw rows: 46904
 [hold 집계 점검] category 적용 rows: 46904
 [hold 집계 점검] grouped lot_id+step_seq+category rows: 46181
-[시간] hold 집계/merge: 25.0초
+[시간] hold 집계/merge: 24.1초
 [hold 집계 점검] 최종 hold_summary rows: 41756
 [hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: 0
 [hold flag 점검] source keys: 41756, result keys: 41756
@@ -143,26 +143,50 @@ Series([], Name: count, dtype: int64)
 [concat 검증] issue_eqp 형식 오류 rows: 0
 [concat 검증] issue_eqp 형식 점검 완료
 [concat 생성] output rows: 172
-[시간] concat 생성: 1.9초
+[시간] concat 생성: 1.8초
 [concat 최종컬럼] allowlist 적용 전 columns=39
 [concat 최종컬럼] allowlist 적용 후 columns=39
 [concat 최종컬럼] 제거된 컬럼 수=0
 [concat 최종컬럼] 최종 컬럼 검증 완료
 [검증] lot_inform non-empty rows: 140
-[concat 저장 완료] 경로: D:\PERSONAL_SPACE\SW\python\4_zhbm\output_wip_concat (2).xlsx
+[concat 저장 완료] 경로: D:\PERSONAL_SPACE\SW\python\4_zhbm\output_wip_concat (3).xlsx
 [concat 저장 완료] output_wip_concat.xlsx 저장이 완료되었습니다. 이후 DB 적재 를 수행합니다.
-[DB 적재] loaded_at: 2026-05-16 12:52:40
-[DB 적재] loaded_id: 20260516125240
+[DB 적재] loaded_at: 2026-05-16 12:56:14
+[DB 적재] loaded_id: 20260516125614
 [DB 적재] DB 적재용 columns: 41
 [DB 적재] 대상 테이블: wip_report_lotpath
 [DB 적재] 대상 rows: 172
 [DB 적재] 대상 columns: 41
-[DB 적재 오류] 단계: connect
-[DB 적재 오류] 메시지: (1045, "Access denied for user 'minuk12.choi'@'KORCO215946.samsungds.net' (using password: NO)")
+[DB 적재] DROP TABLE 완료
+[DB 적재] 테이블 생성 완료
+[DB 적재] INSERT 완료: 172 rows
+[DB 적재] commit 완료
 [DB 적재] 연결 종료
+[wip_move 조회] getData 실행 시작
+Query Executed Successfully...
+>> Execution Time: 29.743 sec
+==================================================
+    Rows    :  1277999
+    Columns :  7
+    Size    :  406.79+ MB
+==================================================
+[wip_move 조회] rows: 1277999, columns: 7
+[wip_move 조회] columns: ['일보date', 'lot_id', 'lot_type', 'move', 'process_id', 'step_seq', 'tkout_date']
+[wip_move 적재] loaded_at: 2026-05-16 12:56:15
+[wip_move 적재] loaded_id: 20260516125615
+[wip_move 적재] 대상 rows: 1277999
+[wip_move 적재] 중복 key rows: 0
+[wip_move 적재] DB upsert 대상 rows count: 1277999
+[wip_move 적재 오류] 단계: connect
+[wip_move 적재 오류] 메시지: (1045, "Access denied for user 'minuk12.choi'@'KORCO215946.samsungds.net' (using password: NO)")
+[wip_move 적재] 연결 종료
 Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 130, in dataframe_to_mysql_replace
-    conn = pymysql.connect(
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1948, in <module>
+    main()
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1927, in main
+    dataframe_to_mysql_upsert_wip_move(df_move_db)
+  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 236, in dataframe_to_mysql_upsert_wip_move
+    conn = pymysql.connect(host="12.81.64.130", user="minuk12.choi", passwd="", port=3306, db="app_db", charset="utf8mb4")
   File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 365, in __init__
     self.connect()
   File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\connections.py", line 681, in connect
@@ -176,14 +200,3 @@ Traceback (most recent call last):
   File "C:\Users\minuk12.choi\AppData\Local\aipforge\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
     raise errorclass(errno, errval)
 pymysql.err.OperationalError: (1045, "Access denied for user 'minuk12.choi'@'KORCO215946.samsungds.net' (using password: NO)")
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1948, in <module>
-    main()
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 1920, in main
-    dataframe_to_mysql_replace(db_df, "wip_report_lotpath")
-  File "D:\PERSONAL_SPACE\SW\python\4_zhbm\create_wip_table.py", line 183, in dataframe_to_mysql_replace
-    raise RuntimeError(f"DB 적재 실패(단계: {stage})") from exc
-RuntimeError: DB 적재 실패(단계: connect)
