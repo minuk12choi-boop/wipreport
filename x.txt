@@ -1,3 +1,4 @@
+Name: count, dtype: int64
 [축약 점검] eqp 축약 전/후 rows: 1985 -> 1985
 [행수 점검] mcpath + eqp 조인 후 rows: 352
 [중복 점검] mcpath + eqp 조인 후 완전중복 rows: 3
@@ -31,7 +32,7 @@ Series([], Name: count, dtype: int64)
 [hold 집계 점검] hold raw rows: 46764
 [hold 집계 점검] category 적용 rows: 46764
 [hold 집계 점검] grouped lot_id+step_seq+category rows: 46055
-[시간] hold 집계/merge: 24.7초
+[시간] hold 집계/merge: 24.6초
 [hold 집계 점검] 최종 hold_summary rows: 41632
 [hold 집계 점검] 최종 hold_summary lot_id+step_seq duplicate rows: 0
 [hold flag 점검] source keys: 41632, result keys: 41632
@@ -136,4 +137,6 @@ Series([], Name: count, dtype: int64)
 [concat 최종컬럼] 제거된 컬럼 예시=['de_rank', 'delay_step_type', 'tkin_type_detail', 'eqp_batch_kind', 'eqp_eqpline', 'eqp_body_eqp_status', 'eqpid', 'eqpissue', '예약제외', '예약제외_user', '예약제외_reason', '예약제외_date', 'hold', 'hold_user', 'hold_reason', 'hold_date', 'ftp', 'ftp_user', 'ftp_reason', 'ftp_date']
 [concat 최종컬럼] 최종 컬럼 검증 완료
 [concat 컬럼정리] status_reason 위치 조정 완료
-오류: issue_eqp 형식 오류: 설비명(숫자.숫자일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.
+[concat 검증] issue_eqp 형식 점검 대상 rows: 14
+[concat 검증] issue_eqp 형식 오류 rows: 3
+오류: issue_eqp 형식 오류가 있습니다. DOWN/PM/LOCAL 블록 안의 각 item은 설비명(n.n일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.
