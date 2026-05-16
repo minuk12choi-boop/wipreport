@@ -2,10 +2,8 @@ import bigdataquery as _bdq
 from bigdataquery import getData as _get_data
 
 move = """ 
-with
-h as (
 SELECT 
-    lot_id, lot_type, move, 일보date
+    일보date, lot_id, lot_type, move, process_id, step_seq, tkout_date
 FROM (SELECT 
 a.*, 
 MAX(a.R) OVER (PARTITION BY a.lot_id, a.step_seq, a.process_eqp_id, a.ppid, a.tkout_date) AS `M`
@@ -35,11 +33,7 @@ WHERE lot_transn_type='TrackOut'
 
 WHERE R=M
 	AND 일보date >= 
-		DATE_ADD(CAST(NOW() AS DATE), -1))
-
-select 일보date, lot_id, lot_type, sum(move) as move
-from h
-group by 일보date, lot_id, lot_type
+		DATE_ADD(CAST(NOW() AS DATE), -1)
 """
 
         df_move = getData(
