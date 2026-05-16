@@ -7,6 +7,13 @@ import time
 
 import pandas as pd
 try:
+    import bigdataquery as _bdq
+    from bigdataquery import getData as _get_data
+except ImportError:
+    _bdq = None
+    _get_data = None
+
+try:
     import pymysql
 except ImportError:
     pymysql = None
@@ -48,6 +55,41 @@ REQUIRED_COLUMNS = {
 ENCODING_CANDIDATES = ["utf-16", "utf-16-le", "utf-8-sig", "cp949", "euc-kr", "utf-8"]
 SEP_CANDIDATES = [",", "\t", "|", ";"]
 KEEP_STATUS_REASON = True
+
+MOVE_SQL = """
+SELECT 
+    일보date, lot_id, lot_type, move, process_id, step_seq, tkout_date
+FROM (SELECT 
+a.*, 
+MAX(a.R) OVER (PARTITION BY a.lot_id, a.step_seq, a.process_eqp_id, a.ppid, a.tkout_date) AS `M`
+
+FROM (SELECT  
+    ROW_NUMBER() OVER (ORDER BY lot_id) AS `R`,
+    lot_id,  
+    lot_type,  
+    process_id,  
+    step_seq, 
+    ppid, 
+    (CASE WHEN lot_type IN ('PP','PB','PG') THEN component_qty END) AS move,  
+    process_eqp_id,
+    TO_TIMESTAMP(SUBSTR(lot_transn_time,1,15), 'yyyyMMdd HHmmss') AS `tkout_date`, 
+    (CASE  
+        WHEN SUBSTR(lot_transn_time, 10, 2) >= '22' THEN  
+            TO_DATE(DATE_ADD(TO_TIMESTAMP(SUBSTR(lot_transn_time, 1, 8), 'yyyyMMdd'), 1))
+        ELSE  
+            TO_DATE(TO_TIMESTAMP(SUBSTR(lot_transn_time, 1, 8), 'yyyyMMdd'))
+        END) AS `일보date`
+
+FROM fab.m_lot_transn_hist  
+WHERE lot_transn_type='TrackOut'  
+    AND sys_line_id='PFR1'           
+    AND lot_type IN ('PP','PB','PG')
+    AND tkin_date >= DATE_ADD(NOW(), -2)) a ) b
+
+WHERE R=M
+    AND 일보date >= 
+        DATE_ADD(CAST(NOW() AS DATE), -1)
+"""
 
 FINAL_CONCAT_COLUMNS = [
     "sys_line_id", "cur_line_id", "eqpline", "sysdate", "lot_inform", "lot_id", "status", "status_reason", "grade",
@@ -147,14 +189,152 @@ def dataframe_to_mysql_replace(df: pd.DataFrame, table_name: str = "wip_report_l
         print("[DB 적재] 연결 종료")
 
 
-def add_load_metadata(df: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
-    now = pd.Timestamp.now()
+def add_load_metadata(df: pd.DataFrame, now: pd.Timestamp | None = None) -> tuple[pd.DataFrame, str, str]:
+    now = now if now is not None else pd.Timestamp.now()
     loaded_at = now.strftime("%Y-%m-%d %H:%M:%S")
     loaded_id = now.strftime("%Y%m%d%H%M%S")
     out = df.copy()
     out["loaded_at"] = loaded_at
     out["loaded_id"] = loaded_id
     return out, loaded_at, loaded_id
+
+
+def fetch_wip_move() -> pd.DataFrame:
+    if _get_data is None:
+        print("bigdataquery가 설치되어 있지 않아 wip_move 적재를 수행할 수 없습니다.")
+        print("사내 bigdataquery 실행 환경에서 다시 실행해주세요.")
+        raise WipBuildError("wip_move 조회 실패: bigdataquery 미설치")
+    print("[wip_move 조회] getData 실행 시작")
+    df_move = _get_data(param=MOVE_SQL, convert_type=True, verbose=True)
+    if not isinstance(df_move, pd.DataFrame):
+        raise WipBuildError("wip_move 조회 실패: getData 결과가 pandas DataFrame이 아닙니다.")
+    df_move = df_move.copy()
+    df_move.columns = [str(c).strip().lower() for c in df_move.columns]
+    required_cols = ["일보date", "lot_id", "lot_type", "move", "process_id", "step_seq", "tkout_date"]
+    missing = [c for c in required_cols if c not in df_move.columns]
+    if missing:
+        raise WipBuildError(f"wip_move 조회 실패: 필수 컬럼 누락 {missing}")
+    print(f"[wip_move 조회] rows: {len(df_move)}, columns: {len(df_move.columns)}")
+    print(f"[wip_move 조회] columns: {df_move.columns.tolist()}")
+    return df_move[required_cols].copy()
+
+
+def dataframe_to_mysql_upsert_wip_move(df_move: pd.DataFrame) -> None:
+    if pymysql is None:
+        print("pymysql이 설치되어 있지 않아 wip_move 적재를 수행할 수 없습니다.")
+        raise RuntimeError("pymysql 미설치")
+    required_cols = ["일보date", "lot_id", "lot_type", "move", "process_id", "step_seq", "tkout_date", "loaded_at", "loaded_id"]
+    require_columns(df_move, required_cols, "wip_move")
+    print(f"[wip_move 적재] 대상 rows: {len(df_move)}")
+    dup_cnt = int(df_move.duplicated(subset=["일보date", "lot_id", "lot_type", "process_id", "step_seq", "tkout_date"], keep=False).sum())
+    print(f"[wip_move 적재] 중복 key rows: {dup_cnt}")
+    print(f"[wip_move 적재] DB upsert 대상 rows count: {len(df_move)}")
+    conn = None
+    cursor = None
+    stage = "connect"
+    try:
+        conn = pymysql.connect(host="12.81.64.130", user="minuk12.choi", passwd="", port=3306, db="app_db", charset="utf8mb4")
+        cursor = conn.cursor()
+        stage = "create_table"
+        cursor.execute("""CREATE TABLE IF NOT EXISTS `wip_move` (
+            `일보date` VARCHAR(32) NULL, `lot_id` VARCHAR(80) NULL, `lot_type` VARCHAR(40) NULL,
+            `move` TEXT NULL, `process_id` VARCHAR(80) NULL, `step_seq` VARCHAR(80) NULL, `tkout_date` VARCHAR(64) NULL,
+            `loaded_at` VARCHAR(32) NULL, `loaded_id` VARCHAR(32) NULL,
+            UNIQUE KEY uq_wip_move (`일보date`, `lot_id`, `lot_type`, `process_id`, `step_seq`, `tkout_date`)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
+        print("[wip_move 적재] 테이블 생성 확인 완료")
+        stage = "upsert"
+        sql = """INSERT INTO `wip_move` (`일보date`,`lot_id`,`lot_type`,`move`,`process_id`,`step_seq`,`tkout_date`,`loaded_at`,`loaded_id`)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE `move`=VALUES(`move`),`loaded_at`=VALUES(`loaded_at`),`loaded_id`=VALUES(`loaded_id`)"""
+        prepared = df_move[required_cols].where(pd.notna(df_move[required_cols]), None).astype("object")
+        rows = [tuple(row) for row in prepared.itertuples(index=False, name=None)]
+        if rows:
+            cursor.executemany(sql, rows)
+        print(f"[wip_move 적재] UPSERT 완료: {len(rows)} rows")
+        conn.commit()
+        print("[wip_move 적재] commit 완료")
+    except Exception as exc:
+        if conn is not None:
+            conn.rollback()
+        print(f"[wip_move 적재 오류] 단계: {stage}")
+        print(f"[wip_move 적재 오류] 메시지: {exc}")
+        raise
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+        print("[wip_move 적재] 연결 종료")
+
+
+def build_wip_move_group(df_move: pd.DataFrame) -> pd.DataFrame:
+    required_cols = ["일보date", "lot_id", "lot_type", "move"]
+    require_columns(df_move, required_cols, "wip_move_group 입력")
+    print(f"[wip_move_group 생성] input rows: {len(df_move)}")
+    work = df_move.copy()
+    work["move"] = pd.to_numeric(work["move"], errors="coerce").fillna(0)
+    work["일보date_dt"] = pd.to_datetime(work["일보date"], errors="coerce")
+    df_group = work.groupby(["일보date", "lot_id", "lot_type"], dropna=False)["move"].sum().reset_index()
+    parsed_date = pd.to_datetime(df_group["일보date"], errors="coerce")
+    iso_week = parsed_date.dt.isocalendar().week
+    df_group["y"] = parsed_date.dt.year.astype("Int64").astype("string")
+    df_group["m"] = parsed_date.dt.month.astype("Int64").astype("string")
+    df_group["w"] = ("W" + iso_week.astype("Int64").astype("string")).where(iso_week.notna(), pd.NA)
+    df_group = df_group[["y", "m", "w", "일보date", "lot_id", "lot_type", "move"]]
+    require_columns(df_group, ["y", "m", "w", "일보date", "lot_id", "lot_type", "move"], "wip_move_group")
+    dup_group = int(df_group.duplicated(subset=["일보date", "lot_id", "lot_type"], keep=False).sum())
+    print(f"[wip_move_group 생성] rows: {len(df_group)}")
+    print(f"[wip_move_group 생성] 중복 key rows: {dup_group}")
+    print(f"[wip_move_group 생성] move 합계 계산 row 수 출력: {len(df_group)}")
+    print(f"[wip_move_group 생성] output rows: {len(df_group)}")
+    return df_group
+
+
+def dataframe_to_mysql_upsert_wip_move_group(df_group: pd.DataFrame) -> None:
+    if pymysql is None:
+        print("pymysql이 설치되어 있지 않아 wip_move_group 적재를 수행할 수 없습니다.")
+        raise RuntimeError("pymysql 미설치")
+    required_cols = ["y", "m", "w", "일보date", "lot_id", "lot_type", "move", "loaded_at", "loaded_id"]
+    require_columns(df_group, required_cols, "wip_move_group")
+    print(f"[wip_move_group 적재] 대상 rows: {len(df_group)}")
+    conn = None
+    cursor = None
+    stage = "connect"
+    try:
+        conn = pymysql.connect(host="12.81.64.130", user="minuk12.choi", passwd="", port=3306, db="app_db", charset="utf8mb4")
+        cursor = conn.cursor()
+        stage = "create_table"
+        cursor.execute("""CREATE TABLE IF NOT EXISTS `wip_move_group` (
+            `y` VARCHAR(8) NULL, `m` VARCHAR(8) NULL, `w` VARCHAR(8) NULL, `일보date` VARCHAR(32) NULL,
+            `lot_id` VARCHAR(80) NULL, `lot_type` VARCHAR(40) NULL, `move` TEXT NULL,
+            `loaded_at` VARCHAR(32) NULL, `loaded_id` VARCHAR(32) NULL,
+            UNIQUE KEY uq_wip_move_group (`일보date`, `lot_id`, `lot_type`)
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
+        print("[wip_move_group 적재] 테이블 생성 확인 완료")
+        stage = "upsert"
+        sql = """INSERT INTO `wip_move_group` (`y`,`m`,`w`,`일보date`,`lot_id`,`lot_type`,`move`,`loaded_at`,`loaded_id`)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE `y`=VALUES(`y`),`m`=VALUES(`m`),`w`=VALUES(`w`),`move`=VALUES(`move`),`loaded_at`=VALUES(`loaded_at`),`loaded_id`=VALUES(`loaded_id`)"""
+        prepared = df_group[required_cols].where(pd.notna(df_group[required_cols]), None).astype("object")
+        rows = [tuple(row) for row in prepared.itertuples(index=False, name=None)]
+        if rows:
+            cursor.executemany(sql, rows)
+        print(f"[wip_move_group 적재] UPSERT 완료: {len(rows)} rows")
+        conn.commit()
+        print("[wip_move_group 적재] commit 완료")
+    except Exception as exc:
+        if conn is not None:
+            conn.rollback()
+        print(f"[wip_move_group 적재 오류] 단계: {stage}")
+        print(f"[wip_move_group 적재 오류] 메시지: {exc}")
+        raise
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+        print("[wip_move_group 적재] 연결 종료")
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -1738,6 +1918,21 @@ def main() -> None:
         raise WipBuildError("DB 적재 검증 실패: loaded_id가 비어 있습니다.")
 
     dataframe_to_mysql_replace(db_df, "wip_report_lotpath")
+
+    move_now = pd.Timestamp.now()
+    df_move = fetch_wip_move()
+    df_move_db, loaded_at_move, loaded_id_move = add_load_metadata(df_move, now=move_now)
+    print(f"[wip_move 적재] loaded_at: {loaded_at_move}")
+    print(f"[wip_move 적재] loaded_id: {loaded_id_move}")
+    dataframe_to_mysql_upsert_wip_move(df_move_db)
+
+    df_move_group = build_wip_move_group(df_move)
+    df_move_group_db, loaded_at_group, loaded_id_group = add_load_metadata(df_move_group, now=move_now)
+    print(f"[wip_move_group 적재] loaded_at: {loaded_at_group}")
+    print(f"[wip_move_group 적재] loaded_id: {loaded_id_group}")
+    dataframe_to_mysql_upsert_wip_move_group(df_move_group_db)
+    print(f"[결과 요약] wip_move rows: {len(df_move)}")
+    print(f"[결과 요약] wip_move_group rows: {len(df_move_group)}")
 
     print("[입력 파일 요약]")
     for name, meta in [("eqp", eqp_meta), ("hold", hold_meta), ("tip", tip_meta), ("mclot", mclot_meta), ("steppath", steppath_meta)]:
