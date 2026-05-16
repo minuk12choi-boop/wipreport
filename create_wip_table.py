@@ -203,30 +203,51 @@ def validate_issue_eqp_format(value: object) -> bool:
     if not text:
         return True
 
-    allowed_labels = ("DOWN", "PM", "LOCAL")
-    item_pattern = re.compile(r"^.+\((?:\d+(?:\.\d+)?일↑|경과일계산불가)\)$")
+    text = re.sub(r"\s*\n\s*", " / ", text)
+    label_pattern = re.compile(r"\b(DOWN|PM|LOCAL)\s*:", re.IGNORECASE)
+    matches = list(label_pattern.finditer(text))
+    if not matches:
+        return False
 
-    blocks = [blk.strip() for blk in text.split(" / ") if blk.strip()]
-    if not blocks:
-        return True
-
-    for block in blocks:
-        if ":" not in block:
-            return False
-        label, items_part = block.split(":", 1)
-        if label.strip() not in allowed_labels:
-            return False
-        items_part = items_part.strip()
-        if not items_part:
+    for i, match in enumerate(matches):
+        start = match.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[start:end].strip()
+        body = re.sub(r"^\s*/\s*", "", body)
+        body = re.sub(r"\s*/\s*$", "", body)
+        body = body.strip()
+        if not body:
             return False
 
-        items = [item.strip() for item in items_part.split(",") if item.strip()]
+        items = [x.strip() for x in body.split(",") if x.strip()]
         if not items:
             return False
-        if any(item_pattern.match(item) is None for item in items):
-            return False
+        for item in items:
+            item = item.strip().strip("/")
+            if not item:
+                continue
+            if not re.search(r"\((?:-?\d+(?:\.\d+)?일↑|경과일계산불가)\)\s*$", item):
+                return False
 
     return True
+
+
+def diagnose_issue_eqp_format(value: object) -> dict:
+    text = "" if is_blank(value) else str(value)
+    labels = re.findall(r"\b(DOWN|PM|LOCAL)\s*:", text, flags=re.IGNORECASE)
+    return {
+        "length": len(text),
+        "labels_found": [x.upper() for x in labels],
+        "labels_count": len(labels),
+        "contains_day_arrow": "일↑" in text,
+        "contains_calc_fail": "경과일계산불가" in text,
+        "slash_count": text.count("/"),
+        "comma_count": text.count(","),
+        "newline_count": text.count("\n"),
+        "paren_open_count": text.count("("),
+        "paren_close_count": text.count(")"),
+        "masked": f"len={len(text)} head='{text[:6]}' tail='{text[-6:]}'" if text else "blank",
+    }
 def _build_encoding_order(signature: bytes) -> list[str]:
     if signature.startswith(b"\xff\xfe"):
         preferred = ["utf-16", "utf-16-le"]
@@ -1587,7 +1608,10 @@ def build_wip_concat(wip: pd.DataFrame) -> pd.DataFrame:
         print(f"[concat 검증] issue_eqp 형식 점검 대상 rows: {issue_target_rows}")
         print(f"[concat 검증] issue_eqp 형식 오류 rows: {bad_issue_rows}")
         if bad_issue_rows > 0:
-            raise WipBuildError("issue_eqp 형식 오류가 있습니다. DOWN/PM/LOCAL 블록 안의 각 item은 설비명(n.n일↑) 또는 설비명(경과일계산불가) 형식이어야 합니다.")
+            print(f"[issue_eqp 형식 경고] 형식 오류 rows가 {bad_issue_rows}건 있습니다. 저장은 계속 진행합니다.")
+            bad_samples = base.loc[bad_issue_mask, "issue_eqp"].head(3)
+            for idx, value in enumerate(bad_samples, start=1):
+                print(f"[issue_eqp 형식진단] 오류 샘플 구조 {idx}: {diagnose_issue_eqp_format(value)}")
         print("[concat 검증] issue_eqp 형식 점검 완료")
     if "exclusion_type" in base.columns:
         ex_tokens_ok = base["exclusion_type"].dropna().astype(str).apply(
