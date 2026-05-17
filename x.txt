@@ -1,53 +1,41 @@
-<http://127.0.0.1:8031/wip/summary/>
+1. 로딩 팝업:
+모든 동작에서 버튼을 누르고 로딩 팝업이 뜨도록 해라. 빨라서 바로 로딩되는 것은 상관없으나 느린 것에는 꼭 필요하다. 느린것만 선별할 수 없으니(*뭐가 느려질지 모르니) 전체에 적용하도록해라.
 
-재공 Report
-문의: minuk12.choi / 적재시각: 2026-05-16 15:32:36
-Summary
-기준정보
-필터
-LOT_TYPE
-PP
-제품구분
-선택
-PROC_ID
-선택
-조회
-요약
-[B/N] 병목 후보 Top 5
-PROC: K4B1 / Layer: 140 / Step: B1140130 | 대기성 재공: 49매(4Lot) = WAIT 45매 + HOLD 4매 + WAIT(진행불가) 0매
-PROC: K4B1 / Layer: 150 / Step: B1150110 | 대기성 재공: 46매(3Lot) = WAIT 0매 + HOLD 26매 + WAIT(진행불가) 20매
-PROC: K4B2 / Layer: 151 / Step: B2151110 | 대기성 재공: 41매(3Lot) = WAIT 40매 + HOLD 1매 + WAIT(진행불가) 0매
-PROC: K4B4 / Layer: 196 / Step: B4196110 | 대기성 재공: 20매(1Lot) = WAIT 20매 + HOLD 0매 + WAIT(진행불가) 0매
-PROC: K4B2 / Layer: 193 / Step: B2193030 | 대기성 재공: 20매(1Lot) = WAIT 0매 + HOLD 0매 + WAIT(진행불가) 20매
-현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/140/B1140130) 이슈로 진입 제한 가능성이 있습니다.
-현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/150/B1150110) 이슈로 진입 제한 가능성이 있습니다.
-현재 대기 위치는 연속공정 첫 Step이나, 후속 연속공정 Step(K4B1/150/B1150110) 이슈로 진입 제한 가능성이 있습니다.
-[설비이슈] 설비 이슈 Top 5
-해당 이슈 없음
-[TIP] Prevent Top 5
-EQP: ETODC03-1 / 상태: PREVENT / 경과: 5.1일↑ | 대기성 재공: 46매(3Lot)
-[EXCLUSION] HOLD/FTP/예약제외 Top 5
-PROC: K4B1 / Layer: 150 / Step: B1150110 | 26매(2Lot), 대표 사유: 24070493_이재성, 평균 경과: 0.0일↑
-PROC: K4B2 / Layer: 193 / Step: B2193030 | 20매(1Lot), 대표 사유: WORKmgr, 평균 경과: 0.0일↑
-PROC: K4B3 / Layer: 140 / Step: B3140130 | 20매(1Lot), 대표 사유: 22075883_이지섭, 평균 경과: 0.0일↑
-PROC: K4B1 / Layer: 192 / Step: B1192030 | 19매(1Lot), 대표 사유: WORKmgr, 평균 경과: 0.0일↑
-PROC: K4B1 / Layer: 280 / Step: B1280060 | 15매(2Lot), 대표 사유: SORTmgr, 평균 경과: 0.0일↑
-Lot Balance
-지수
-초HOT
-초HOT 집계는 재공정보 hot_type 컬럼으로 확인
-이슈 정리
-대분류
-선택
-확인필요
-선택
-적용
-대분류	ISSUE	STATUS	대기재공	확인필요
-TIP	
-ETODC03-1
-PREVENT(5.1일↑)	46매(3Lot)	
-미정
-EXCLUSION	
+2. 요약은 버튼을 눌러서 조회하도록:
+coderoo를 활용한 코드를 만든 뒤 걔를 branch에 업데이트하고, 그것을 활용하게한다.
+*요약 내용에서, 해야할 일을 다 뒤에 몰아넣지 말고, 이슈와 해야할 일을 하나의 set로 묶어서 보여지게하고. [bottleneck], [eqpissue], [tip], [exclusion](*hold, ftp, 예약제외) 총 4가지 유형으로 분류되게하기.
+
+3. 재공 간단한 요약 표 추가: 위치는 LOT_BALANCE 위에 두기
+3-1. proc별 재공
+         재공_매 | 재공_Lot | 비율
+                |         | Hold|wait(진행불가)|wait|run
+--------------------------------
+proc_id |
+--------------------------------
+     계 |
+3-2. grade 재공(*over되면 빨간색으로 표시되게하기)
+         재공_LOT | capa(비율) | over
+--------------------------------------
+    G1|
+    G2|
+    ...
+    계|
 
 
+4. 기준정보에 추가할것:
+4-1. 제품별 main proc_id
+4-2. 제품별 grade capa(*갯수와 % 둘다 넣기)
+4-3. line코드별 line명
+4-4. 스케쥴을 위한 PROC, MODULE별 가중치 넣기
 
+5. 이슈 요약 표에서 이슈별 해결 방안 넣을 수 있게하기:(*5번 내용들은 요약에서 활용할 수 있게하여 추후 같은 문제 발생 시 여기서의 해결 이력들 제시하게 하기)
+5-1. ISSUEEQP
+:설비명 / BU일자 / 호환PATH / 호환대상(*DROPDOWN으로, 전부, MODULE만, 평가시 전부) / BACKUP LOT /  비고
+5-2. TIP
+: 설비명 / TIP해제일자 / 호환PATH / 호환대상(*DROPDOWN으로, 전부, MODULE만, 평가시 전부) / BACKUP LOT /  비고
+5-3. EXCLUSION(*STEP_SEQ와 DESC는 LOT_ID 치면 현재의 EXCLUSION STEP정보 자동으로 불러오도록 하기)
+: LOT_ID / STEP_SEQ / STEP_DESC / 해제 가능일자 / 공정이슈(*공정이슈 특별한게 있으면 넣기)
+
+6. 재공정보에서:
+6-1. LINE관련해서 LINE코드와 기준정보의 4-3에서 입력되는 LINE명 매치하여 LINE명 보여지게 하기
+6-2. 살릴 컬럼만 놔두기. MOVE와 연계하여 전일 MOVE와 금일 현재 MOVE 연동되게하기.
