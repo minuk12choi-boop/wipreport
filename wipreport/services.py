@@ -172,6 +172,98 @@ def _build_summary_sections(rows):
     ]
 
 
+def build_lot_type_breakdown(rows):
+    acc = defaultdict(lambda: {'wait': 0.0, 'hold': 0.0, 'blocked': 0.0, 'lots': set()})
+    for r in rows:
+        st = r.get('status') or ''
+        if st not in ('WAIT', 'HOLD', 'WAIT(진행불가)'):
+            continue
+        lot_type = r.get('lot_type') or '미지정'
+        qty = _to_num(r.get('cur_qty'))
+        acc[lot_type]['lots'].add(r.get('lot_id') or '')
+        if st == 'WAIT':
+            acc[lot_type]['wait'] += qty
+        elif st == 'HOLD':
+            acc[lot_type]['hold'] += qty
+        elif st == 'WAIT(진행불가)':
+            acc[lot_type]['blocked'] += qty
+
+    items = []
+    for lot_type, v in acc.items():
+        total = v['wait'] + v['hold'] + v['blocked']
+        items.append({
+            'lot_type': lot_type,
+            'wait': int(v['wait']),
+            'hold': int(v['hold']),
+            'blocked': int(v['blocked']),
+            'total': int(total),
+            'lots': len({x for x in v['lots'] if x}),
+        })
+    items.sort(key=lambda x: x['total'], reverse=True)
+    return items
+
+
+def build_wip_issue_summary_rows(rows):
+    bn = defaultdict(lambda: {'wait': 0.0, 'hold': 0.0, 'blocked': 0.0, 'lots': set(), 'desc': '-', 'eqps': set(), 'lot_types': defaultdict(float)})
+    for r in rows:
+        st = r.get('status') or ''
+        if st not in ('WAIT', 'HOLD', 'WAIT(진행불가)'):
+            continue
+        qty = _to_num(r.get('cur_qty')); lot = r.get('lot_id') or ''
+        key = (r.get('proc_id') or '-', r.get('layer_id') or '-', str(r.get('step_seq') or '-'))
+        x = bn[key]
+        x['lots'].add(lot)
+        x['desc'] = r.get('step_desc') or '-'
+        if r.get('eqpgroup'):
+            x['eqps'].add(r['eqpgroup'])
+        if r.get('eqpgroup_cham'):
+            x['eqps'].add(r['eqpgroup_cham'])
+        lot_type = r.get('lot_type') or '미지정'
+        x['lot_types'][lot_type] += qty
+        if st == 'WAIT':
+            x['wait'] += qty
+        elif st == 'HOLD':
+            x['hold'] += qty
+        elif st == 'WAIT(진행불가)':
+            x['blocked'] += qty
+    rows_out = []
+    for (proc, layer, step), v in bn.items():
+        total = v['wait'] + v['hold'] + v['blocked']
+        lt_items = sorted(v['lot_types'].items(), key=lambda x: x[1], reverse=True)
+        major_lot_type, major_qty = (lt_items[0] if lt_items else ('-', 0.0))
+        rows_out.append({
+            'proc_id': proc, 'layer_id': layer, 'step_seq': step, 'step_desc': v['desc'],
+            'eqpgroups': sorted(v['eqps']), 'wait': int(v['wait']), 'hold': int(v['hold']), 'blocked': int(v['blocked']),
+            'total': int(total), 'lot_count': len({x for x in v['lots'] if x}),
+            'major_lot_type': major_lot_type, 'major_lot_type_ratio': (major_qty / total * 100) if total > 0 else 0.0,
+        })
+    rows_out.sort(key=lambda x: (x['total'], x['blocked'], x['hold'], x['wait']), reverse=True)
+    return rows_out
+
+
+def build_summary_card_issue_comments(issue_rows, lot_type_breakdown, selected_lot_types):
+    if not issue_rows:
+        return ['해당 이슈 없음']
+    top = issue_rows[0]
+    risk_part = '단순 대기 중심입니다.'
+    if top['blocked'] >= top['wait'] or top['hold'] >= top['wait']:
+        risk_part = 'WAIT 대비 WAIT(진행불가)/HOLD 비중이 높아 진행 차단 가능성이 큽니다.'
+    lot_focus = ''
+    if len(selected_lot_types) == 1:
+        lot_focus = f"선택 lot_type({selected_lot_types[0]}) 기준으로 집계되었습니다."
+    elif lot_type_breakdown:
+        lead = lot_type_breakdown[0]
+        total_all = sum(x['total'] for x in lot_type_breakdown) or 1
+        if lead['total'] / total_all >= 0.45:
+            lot_focus = f"전체 lot_type 중 {lead['lot_type']}에 대기성 총량이 집중되었습니다."
+    eqp_text = ', '.join(top['eqpgroups']) if top['eqpgroups'] else '-'
+    return [
+        f"현재 B/N은 PROC/LAYER/STEP 기준 {top['proc_id']}/{top['layer_id']}/{top['step_seq']}({top['step_desc']})에 집중되어 있으며, {risk_part}",
+        f"EQPGROUP 기준 {eqp_text} 구간에서 대기성 총량 {top['total']}매({top['lot_count']}Lot), 구성 WAIT {top['wait']} / WAIT(진행불가) {top['blocked']} / HOLD {top['hold']}입니다.",
+        lot_focus or f"lot_type 기준 우세군은 {top['major_lot_type']}({top['major_lot_type_ratio']:.1f}%)이며 우선 확인이 필요합니다.",
+    ]
+
+
 def build_summary(params):
     try:
         requested_lot_types = params.getlist('lot_type') if hasattr(params, 'getlist') else []
@@ -291,7 +383,13 @@ def build_summary(params):
         logger.info('[wip] lot_type options count=%s', len(lot_type_options))
         logger.info('[wip] wip_rows column count=%s', len(wip_rows[0].keys()) if wip_rows else 0)
 
-        out = {'ok': True, 'latest_loaded_at': get_latest_loaded_at(), 'message': '', 'filters': {'lot_type': lot_type_options or ['PP'], 'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in all_rows if x.get('lot_id')}), 'proc_id': sorted({x['proc_id'] for x in all_rows if x.get('proc_id')}), 'issue_category': ['설비이슈', 'TIP', 'EXCLUSION'], 'need_check': ['PHOTO', 'METRO', 'METAL', 'CMP', 'CLN', 'CVD', 'IMP', 'DIFF', '미정']}, 'summary_sections': _build_summary_sections(uniq_rows), 'lot_balance': lot_balance, 'index_chart': index_chart, 'issue_rows': issue_rows[:200], 'wip_rows': wip_rows, 'pagination': {'page': 1, 'page_size': page_size, 'total': len(uniq_rows)}}
+        bn_issue_rows = build_wip_issue_summary_rows(uniq_rows)
+        lot_type_breakdown = build_lot_type_breakdown(uniq_rows)
+        selected_lot_types = lot_types if lot_types else []
+        summary_sections = _build_summary_sections(uniq_rows)
+        if summary_sections:
+            summary_sections[0]['lines'] = build_summary_card_issue_comments(bn_issue_rows, lot_type_breakdown, selected_lot_types)
+        out = {'ok': True, 'latest_loaded_at': get_latest_loaded_at(), 'message': '', 'filters': {'lot_type': lot_type_options or ['PP'], 'product': sorted({classify_product(x.get('lot_id'), product_rules) for x in all_rows if x.get('lot_id')}), 'proc_id': sorted({x['proc_id'] for x in all_rows if x.get('proc_id')}), 'issue_category': ['설비이슈', 'TIP', 'EXCLUSION'], 'need_check': ['PHOTO', 'METRO', 'METAL', 'CMP', 'CLN', 'CVD', 'IMP', 'DIFF', '미정']}, 'summary_sections': summary_sections, 'lot_balance': lot_balance, 'index_chart': index_chart, 'issue_rows': issue_rows[:200], 'wip_rows': wip_rows, 'pagination': {'page': 1, 'page_size': page_size, 'total': len(uniq_rows)}, 'lot_type_breakdown': lot_type_breakdown, 'bn_issue_rows': bn_issue_rows[:10]}
         return make_json_safe(out)
     except Exception as exc:
         logger.exception('[summary-data 오류] %s: %s', exc.__class__.__name__, exc)
